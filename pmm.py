@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[11]:
+# In[2]:
 
 
 # import tools
@@ -16,7 +16,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-# In[12]:
+# In[3]:
 
 
 class Poisson_Mixture:
@@ -38,20 +38,20 @@ class Poisson_Mixture:
         self.tens_t = np.random.gamma(np.ones((C_t,D)),                                      D*np.ones((C_t,D))) #generate true intensity[C_t,D]
         
         self.y_t = np.random.multinomial(1,self.mr_t,size=N) #generate true component[N,C_t]
-        raw_data = np.random.poisson(np.sum(self.tens_t[np.newaxis,:,:]*                                            self.y_t[:,:,np.newaxis],                                            axis=1)) #generate raw data[N,D]
+        self.X_t = np.random.poisson(np.sum(self.tens_t[np.newaxis,:,:]*                                            self.y_t[:,:,np.newaxis],                                            axis=1)) #generate raw data[N,D]
         
-        self.bin_label,self.bin_weight = np.unique(raw_data,return_counts=True,axis=0)
+        self.bin_label,self.bin_weight = np.unique(self.X_t,return_counts=True,axis=0)
         self.N_b = np.size(self.bin_weight)
         #label[N_b,D],weight[D]
 
-    def set_model(self,C,cent,shape,scale):
+    def set_model(self,C,cent,shape,scale,seed=None):
 
         if C==np.size(cent) and C==np.size(shape,axis=0) and C==np.size(scale,axis=0)            and self.D==np.size(shape,axis=1) and self.D==np.size(scale,axis=1):
             self.C = C
             self.cent = cent
             self.shape = shape
             self.scale = scale
-            self.set_GS()
+            self.set_GS(seed=seed)
             self.set_VI()
             self.set_CGS()
         else:
@@ -108,13 +108,65 @@ class Poisson_Mixture:
             self.tens_GS[k,:,:,:] = self.tens_gsc
   
     def set_VI(self):
-        pass
+        
+        self.hp_cent_vic = self.cent #[C]
+        self.hp_shape_vic = self.shape #[C,D]
+        self.hp_scale_vic = self.scale #[C,D]
+        
+        #run one cycle
+        self.Variational_cycle()
     
-    def VariationalInference(self):
-        pass
+    def Variational_cycle(self):
+        
+        #calculate hp_pi_vic
+        lmd_ex = self.hp_shape_vic*self.hp_scale_vic #[C,D]
+        ln_lmd_ex = spsp.digamma(self.hp_shape_vic)+np.log(self.hp_scale_vic) #[C,D]
+        ln_pi_ex = spsp.digamma(self.hp_cent_vic)-spsp.digamma(np.sum(self.hp_cent_vic)) #[C]
+        self.hp_pi_vic = np.exp(ln_pi_ex)[np.newaxis,:]*np.prod(np.exp(                            self.bin_label[:,np.newaxis,:]*ln_lmd_ex[np.newaxis,:,:]-lmd_ex[np.newaxis,:,:]),axis=2) #[N_b,C]
+        self.hp_pi_vic/=np.sum(self.hp_pi_vic,axis=1)[:,np.newaxis]
+        
+        #calculate hp_shape_vic and hp_scale_vic
+        self.hp_shape_vic = np.sum(self.hp_pi_vic[:,:,np.newaxis]*self.bin_label[:,np.newaxis,:]*                                   self.bin_weight[:,np.newaxis,np.newaxis],axis=0)+self.shape
+        self.hp_scale_vic = self.scale/(1+np.sum(self.hp_pi_vic[:,:,np.newaxis]*                                                 self.bin_weight[:,np.newaxis,np.newaxis]*self.scale[np.newaxis,:,:],axis=0))
+        
+        #calculate hp_cent_vic
+        self.hp_cent_vic = np.sum(self.hp_pi_vic*self.bin_weight[:,np.newaxis],axis=0)+self.cent
+    
+    
+    def VariationalInference(self,ITER=500):
+        
+        for k in tqdm(range(ITER)):
+            self.Variational_cycle()
     
     def set_CGS(self):
         pass
     
     def CollapsedGibbsSampling(self):
         pass
+    
+        
+
+
+# In[11]:
+
+
+def try_pmm_model(seed=None):
+    
+
+    print('generate model...')
+    pm = Poisson_Mixture(2,3,10000,seed)
+    print('done.\ntrue parameter :\n',pm.mr_t,'\n',pm.tens_t)
+
+    print('\nset model...')
+    pm.set_model(2,10*np.array([1+10**(-3),1+10**(-4),]),np.ones((2,3)),3*np.ones((2,3)),seed)
+    print('done.')
+
+    print('\ntry Gibbs sampling...')
+    pm.GibbsSampling(10000)
+    print('done.\na Gibbs sample :\n',np.mean(pm.mr_GS,axis=(0,1)),'\n',np.mean(pm.tens_GS,axis=(0,1)))
+
+    print('\ntry variational inference...')
+    pm.VariationalInference(10000)
+    print('done.\nhyper parameter :\n',pm.hp_cent_vic,'\n',pm.hp_shape_vic*pm.hp_scale_vic)
+
+
