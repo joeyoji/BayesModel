@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[2]:
+# In[1]:
 
 
 # import tools
@@ -10,13 +10,14 @@ import matplotlib.pyplot as plt
 plt.style.use('seaborn-white')
 import numpy as np
 import scipy.special as spsp
+import scipy.stats as spst
 from tqdm.notebook import tqdm
 
 import warnings
 warnings.filterwarnings('ignore')
 
 
-# In[3]:
+# In[6]:
 
 
 class Poisson_Mixture:
@@ -139,34 +140,74 @@ class Poisson_Mixture:
             self.Variational_cycle()
     
     def set_CGS(self):
-        pass
+        
+        #before>>>
+        self.y_cgsc = np.random.multinomial(1,np.ones(self.C)/self.C,size=self.N) #[N,C]
+        self.hp_cent_cgsc = np.sum(self.y_cgsc,axis=0)+self.cent #[C]
+        self.hp_shape_cgsc = np.sum(self.y_cgsc[:,:,np.newaxis]*self.X_t[:,np.newaxis,:],axis=0)+self.shape #[C,D]
+        self.hp_scale_cgsc = (self.scale+np.sum(self.y_cgsc,axis=0)[:,np.newaxis]) #[C,D]
+        #<<<
+        
+        self.Collapsed_cycle()
     
-    def CollapsedGibbsSampling(self):
-        pass
+    def Collapsed_cycle(self):
+                
+        self.hp_cent_cgsc = self.hp_cent_cgsc[np.newaxis,:]-self.y_cgsc #[N,C]
+        self.hp_shape_cgsc = self.hp_shape_cgsc[np.newaxis,:,:]-self.y_cgsc[:,:,np.newaxis]*self.X_t[:,np.newaxis,:] #[N,C,D]
+        self.hp_scale_cgsc = self.hp_scale_cgsc[np.newaxis,:,:]-self.y_cgsc[:,:,np.newaxis] #[N,C,D]
+
+        nb_p = 1/(1+self.hp_scale_cgsc) #[N,C,D]
+        nb_x = spsp.binom(self.X_t[:,np.newaxis,:]+self.hp_shape_cgsc-1,self.hp_shape_cgsc-1)*                    ((1-nb_p)**self.hp_shape_cgsc)*nb_p**self.X_t[:,np.newaxis,:]
+
+        self.hp_pi_cgsc = self.hp_cent_cgsc*np.prod(nb_x,axis=2) #[N,C]
+            
+
+        self.y_cgsc = np.zeros((self.N,self.C),dtype=int) #[N,C]
+        Wei = np.ones(self.N,dtype=int) #Wei[N]
+        
+        for c in range(self.C-1):
+            prb = self.hp_pi_cgsc[:,c]/np.sum(self.hp_pi_cgsc[:,c:],axis=1)
+            prb[np.isnan(prb)] = 0
+            self.y_cgsc[:,c] = np.random.binomial(Wei,prb)
+            Wei-=self.y_cgsc[:,c]
+        self.y_cgsc[:,self.C-1] = Wei
+        
+        self.hp_cent_cgsc = np.sum(self.y_cgsc,axis=0)+self.cent #[C]
+        self.hp_shape_cgsc = np.sum(self.y_cgsc[:,:,np.newaxis]*self.X_t[:,np.newaxis,:],axis=0)+self.shape #[C,D]
+        self.hp_scale_cgsc = self.scale+np.sum(self.y_cgsc,axis=0)[:,np.newaxis] #[C,D]
+        
+    
+    def CollapsedGibbsSampling(self,ITER=500):
+        
+        for k in tqdm(range(ITER)):
+            self.Collapsed_cycle()
     
         
 
 
-# In[11]:
+# In[7]:
 
 
-def try_pmm_model(seed=None):
-    
+def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER=10000,seed=None):
+
 
     print('generate model...')
-    pm = Poisson_Mixture(2,3,10000,seed)
+    pm = Poisson_Mixture(C_t,D,N,seed)
     print('done.\ntrue parameter :\n',pm.mr_t,'\n',pm.tens_t)
 
     print('\nset model...')
-    pm.set_model(2,10*np.array([1+10**(-3),1+10**(-4),]),np.ones((2,3)),3*np.ones((2,3)),seed)
+    pm.set_model(C,10*np.ones(C)+1/(10**np.arange(C)),np.ones((C,D)),D*np.ones((C,D)),seed)
     print('done.')
 
     print('\ntry Gibbs sampling...')
-    pm.GibbsSampling(10000)
-    print('done.\na Gibbs sample :\n',np.mean(pm.mr_GS,axis=(0,1)),'\n',np.mean(pm.tens_GS,axis=(0,1)))
+    pm.GibbsSampling(ITER)
+    print('done.\nGibbs sample mean:\n',np.mean(pm.mr_GS,axis=(0,1)),'\n',np.mean(pm.tens_GS,axis=(0,1)))
 
     print('\ntry variational inference...')
-    pm.VariationalInference(10000)
+    pm.VariationalInference(ITER)
     print('done.\nhyper parameter :\n',pm.hp_cent_vic,'\n',pm.hp_shape_vic*pm.hp_scale_vic)
-
-
+    
+    print('\ntry collapsed Gibbs sampling...')
+    pm.CollapsedGibbsSampling(ITER)
+    print('done.\nhyper parameter :\n',pm.hp_cent_cgsc,'\n',pm.hp_shape_cgsc/pm.hp_scale_cgsc)
+    
