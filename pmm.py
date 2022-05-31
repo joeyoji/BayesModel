@@ -21,7 +21,7 @@ import warnings
 # warnings.filterwarnings('ignore')
 
 
-# In[159]:
+# In[162]:
 
 
 class Poisson_Mixture:
@@ -147,12 +147,12 @@ class Poisson_Mixture:
         fig,axes = plt.subplots(1,self.D,figsize=(6*self.D,6))
         fig.suptitle('data')
         if self.D==1:
-            where, degree = np.unique(pm.X_t[:,0],return_counts=True)
+            where, degree = np.unique(self.X_t[:,0],return_counts=True)
             axes.bar(where,degree,color=plt.cm.tab10(0))
             axes.set(xlabel=f'x_{0+1}',ylabel='degree')
         if self.D>1:
             for d in range(self.D):
-                where, degree = np.unique(pm.X_t[:,d],return_counts=True)
+                where, degree = np.unique(self.X_t[:,d],return_counts=True)
                 axes[d].bar(where,degree,color=plt.cm.tab10(d))
                 axes[d].set(xlabel=f'x_{d+1}',ylabel='degree')
         if save:
@@ -325,4 +325,5 @@ def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER=10000,seed=None):
     pm.CollapsedGibbsSampling(ITER)
     print('done.\nhyper parameter :\n',pm.hp_cent_cgsc,'\n',pm.hp_shape_cgsc/pm.hp_scale_cgsc)
     
+
 
