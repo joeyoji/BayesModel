@@ -1,35 +1,60 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[158]:
 
 
 # import tools
 #get_ipython().run_line_magic('matplotlib', 'inline')
 import matplotlib.pyplot as plt
-plt.style.use('seaborn-white')
+import seaborn as sns
+sns.set()
+
 import numpy as np
 import scipy.special as spsp
 import scipy.stats as spst
 from tqdm.notebook import tqdm
 
+import datetime
+import re
 import warnings
 # warnings.filterwarnings('ignore')
 
 
-# In[34]:
+# In[159]:
 
 
 class Poisson_Mixture:
     
+    '''
+    this class is initialized optimally for args.
+    there are three ways to initialize.
+    
+    [1] (data[np.2darray]) ; one argument
+    
+        you can give this a np.2darray. given np.2darray is interpreted as data from Poisson mixture.
+        
+    [2] (C_t[int], D[int], N[int] (, seed[int]) ) ; three(four) arguments
+
+        you can give this triple (quadruple) integers.
+        given integers are interpreted as the number of components in true distribution,
+        the dimension of data, and the number of data (,and random seed) respectively.
+        if you give them, true parameter and data from it are generated randomly.
+        you can use seed argument to fix randomness.
+
+    [3] (mr[np.1darray], tens[np.2darray], N[int] (, seed[int]) ) ; thee(four) arguments
+
+        you can give np.1darray, np.2darray, and integer(s).
+        first np.1darray is interpreted as mixing ratio, second np.2darray is done as intensity,
+        and third integer is done as the number of data (,and fourth integer is done as random seed).
+        the size of mr must correspond to the size of 0-axis of tens.
+        if you give them, data from designated true parameter is generated randomly.
+        you can use seed argument to fix randomness.
+    
+    '''
+    
+    
     def __init__(self,*args):
-        
-        '''
-        initialize optimally for args.
-        
-        ===== 
-        
-        '''
         
         if len(args)==1 and type(args[0])==np.ndarray:
             self.load_data(args[0])
@@ -46,7 +71,7 @@ class Poisson_Mixture:
     def load_data(self,data):
         
         if len(data.shape)!=2:
-            raise TypeError('the shape of data array must be N x D, nwhere N is the number of data and D is the dimension of data.')
+            raise TypeError('the shape of data array must be N x D, where N is the number of data and D is the dimension of data.')
         else:
             
             self.C_t = None
@@ -60,6 +85,7 @@ class Poisson_Mixture:
             
             self.bin_X_t()
                     
+                
     def bin_X_t(self):
         
         self.bin_label,self.bin_weight = np.unique(self.X_t,return_counts=True,axis=0)
@@ -75,6 +101,7 @@ class Poisson_Mixture:
         else:
             raise TypeError('wrong args. check docstring.')
             
+            
     def set_true_parameter_by_array(self,mr,tens):
         
         if mr.shape[0]!=tens.shape[0]:
@@ -85,6 +112,7 @@ class Poisson_Mixture:
             self.mr_t = mr
             self.tens_t = tens
             self.is_true_known = True
+            
             
     def set_true_parameter_by_int(self,C_t,D,seed=None):
         
@@ -98,7 +126,6 @@ class Poisson_Mixture:
         tens = np.random.gamma(np.ones((C_t,D)),D*np.ones((C_t,D))) #[C_t,D]
         
         self.set_true_parameter_by_array(mr,tens)
-
         
         
     def generate_sample(self,N,seed=None):
@@ -114,7 +141,24 @@ class Poisson_Mixture:
         
         self.bin_X_t()
 
-
+        
+    def view_data(self,save=False):
+        
+        fig,axes = plt.subplots(1,self.D,figsize=(6*self.D,6))
+        fig.suptitle('data')
+        if self.D==1:
+            where, degree = np.unique(pm.X_t[:,0],return_counts=True)
+            axes.bar(where,degree,color=plt.cm.tab10(0))
+            axes.set(xlabel=f'x_{0+1}',ylabel='degree')
+        if self.D>1:
+            for d in range(self.D):
+                where, degree = np.unique(pm.X_t[:,d],return_counts=True)
+                axes[d].bar(where,degree,color=plt.cm.tab10(d))
+                axes[d].set(xlabel=f'x_{d+1}',ylabel='degree')
+        if save:
+            fig.savefig('data_bar_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')
+    
+        
     def set_model(self,C,cent,shape,scale,seed=None):
 
         if C==np.size(cent) and C==np.size(shape,axis=0) and C==np.size(scale,axis=0)            and self.D==np.size(shape,axis=1) and self.D==np.size(scale,axis=1):
@@ -255,7 +299,7 @@ class Poisson_Mixture:
         
 
 
-# In[35]:
+# In[160]:
 
 
 def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER=10000,seed=None):
@@ -281,5 +325,4 @@ def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER=10000,seed=None):
     pm.CollapsedGibbsSampling(ITER)
     print('done.\nhyper parameter :\n',pm.hp_cent_cgsc,'\n',pm.hp_shape_cgsc/pm.hp_scale_cgsc)
     
-
 
