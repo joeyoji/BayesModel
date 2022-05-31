@@ -14,36 +14,106 @@ import scipy.stats as spst
 from tqdm.notebook import tqdm
 
 import warnings
-warnings.filterwarnings('ignore')
+# warnings.filterwarnings('ignore')
 
 
-# In[6]:
+# In[34]:
 
 
 class Poisson_Mixture:
     
-    def __init__(self,C_t=1,D=1,N=100,seed=None):
+    def __init__(self,*args):
         
-        self.generate_sample(C_t,D,N,seed)
+        '''
+        initialize optimally for args.
         
-    def generate_sample(self,C_t,D,N,seed=None):
+        ===== 
         
-        self.C_t = C_t
-        self.D = D
-        self.N = N
+        '''
+        
+        if len(args)==1 and type(args[0])==np.ndarray:
+            self.load_data(args[0])
+        elif len(args)==3:
+            self.set_true_parameter(args[0],args[1])
+            self.generate_sample(args[2])
+        elif len(args)==4:
+            self.set_true_parameter(args[0],args[1],args[3])
+            self.generate_sample(args[2],args[3])
+        else:
+            raise TypeError('wrong args. check docstring.')
+                                 
+
+    def load_data(self,data):
+        
+        if len(data.shape)!=2:
+            raise TypeError('the shape of data array must be N x D, nwhere N is the number of data and D is the dimension of data.')
+        else:
+            
+            self.C_t = None
+            self.mr_t = None
+            self.tens_t = None
+            self.is_true_known = False
+            
+            self.X_t = data
+            self.N = np.size(self.X_t,axis=0)
+            self.D = np.size(self.X_t,axis=1)
+            
+            self.bin_X_t()
+                    
+    def bin_X_t(self):
+        
+        self.bin_label,self.bin_weight = np.unique(self.X_t,return_counts=True,axis=0)
+        self.N_b = np.size(self.bin_weight)
+            
+        
+    def set_true_parameter(self,arg1,arg2,seed=None):
+        
+        if type(arg1)==np.ndarray and type(arg2)==np.ndarray:
+            self.set_true_parameter_by_array(arg1,arg2)
+        elif type(arg1)==int and type(arg2)==int:
+            self.set_true_parameter_by_int(arg1,arg2,seed)
+        else:
+            raise TypeError('wrong args. check docstring.')
+            
+    def set_true_parameter_by_array(self,mr,tens):
+        
+        if mr.shape[0]!=tens.shape[0]:
+            raise TypeError('wrong args. check docstring.')
+        else:
+            self.C_t = np.size(mr)
+            self.D = np.size(tens,axis=1)
+            self.mr_t = mr
+            self.tens_t = tens
+            self.is_true_known = True
+            
+    def set_true_parameter_by_int(self,C_t,D,seed=None):
+        
+        if C_t<=0 or D<=0:
+            raise TypeError('C_t and D must be greater than 0.')
         
         if seed:
             np.random.seed(seed)
             
-        self.mr_t = np.random.dirichlet(np.ones(C_t)) #generate true mixing ratio[C_t]
-        self.tens_t = np.random.gamma(np.ones((C_t,D)),                                      D*np.ones((C_t,D))) #generate true intensity[C_t,D]
+        mr = np.random.dirichlet(np.ones(C_t)) #[C_t]
+        tens = np.random.gamma(np.ones((C_t,D)),D*np.ones((C_t,D))) #[C_t,D]
         
-        self.y_t = np.random.multinomial(1,self.mr_t,size=N) #generate true component[N,C_t]
-        self.X_t = np.random.poisson(np.sum(self.tens_t[np.newaxis,:,:]*                                            self.y_t[:,:,np.newaxis],                                            axis=1)) #generate raw data[N,D]
+        self.set_true_parameter_by_array(mr,tens)
+
         
-        self.bin_label,self.bin_weight = np.unique(self.X_t,return_counts=True,axis=0)
-        self.N_b = np.size(self.bin_weight)
-        #label[N_b,D],weight[D]
+        
+    def generate_sample(self,N,seed=None):
+                
+        if N<=0:
+            raise TypeError('N must be greater than 0.')
+        if seed:
+            np.random.seed(seed)
+            
+        self.N = N
+        self.y_t = np.random.multinomial(1,self.mr_t,size=self.N) #[N,C_t]
+        self.X_t = np.random.poisson(np.sum(self.tens_t[np.newaxis,:,:]*self.y_t[:,:,np.newaxis],axis=1)) #[N,D]
+        
+        self.bin_X_t()
+
 
     def set_model(self,C,cent,shape,scale,seed=None):
 
@@ -185,7 +255,7 @@ class Poisson_Mixture:
         
 
 
-# In[7]:
+# In[35]:
 
 
 def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER=10000,seed=None):
@@ -211,3 +281,5 @@ def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER=10000,seed=None):
     pm.CollapsedGibbsSampling(ITER)
     print('done.\nhyper parameter :\n',pm.hp_cent_cgsc,'\n',pm.hp_shape_cgsc/pm.hp_scale_cgsc)
     
+
+
