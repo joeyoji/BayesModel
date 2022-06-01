@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[158]:
+# In[4]:
 
 
 # import tools
@@ -21,7 +21,7 @@ import warnings
 # warnings.filterwarnings('ignore')
 
 
-# In[162]:
+# In[26]:
 
 
 class Poisson_Mixture:
@@ -159,8 +159,15 @@ class Poisson_Mixture:
             fig.savefig('data_bar_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')
     
         
-    def set_model(self,C,cent,shape,scale,seed=None):
+    def set_model(self,C,cent=None,shape=None,scale=None,seed=None):
 
+        if type(cent)==type(None):
+            cent = 10*(np.ones(C)+1/(10**np.arange(C)))
+        if type(shape)==type(None):
+            shape = np.ones((C,self.D))
+        if type(scale)==type(None):
+            scale = self.D*np.ones((C,self.D))
+        
         if C==np.size(cent) and C==np.size(shape,axis=0) and C==np.size(scale,axis=0)            and self.D==np.size(shape,axis=1) and self.D==np.size(scale,axis=1):
             self.C = C
             self.cent = cent
@@ -168,7 +175,7 @@ class Poisson_Mixture:
             self.scale = scale
             self.set_GS(seed=seed)
             self.set_VI()
-            self.set_CGS()
+            self.set_CGS(seed=seed)
         else:
             raise TypeError('the size of variables are not corresponding.')
     
@@ -213,7 +220,10 @@ class Poisson_Mixture:
                         spsp.factorial(self.bin_label[np.newaxis,:,np.newaxis,:])/\
                         np.exp(self.tens_gsc[:,np.newaxis,:,:]),axis=3)
     
-    def GibbsSampling(self,ITER=500):
+    def GibbsSampling(self,ITER=500,seed=None):
+        
+        if seed:
+            np.random.seed(seed)
         
         self.mr_GS = np.zeros((ITER,self.L,self.C)) #[I,L,C]
         self.tens_GS = np.zeros((ITER,self.L,self.C,self.D)) #[I,L,C,D]
@@ -253,8 +263,10 @@ class Poisson_Mixture:
         for k in tqdm(range(ITER)):
             self.Variational_cycle()
     
-    def set_CGS(self):
+    def set_CGS(self,seed=None):
         
+        if seed:
+            np.random.seed(seed)
         #before>>>
         self.y_cgsc = np.random.multinomial(1,np.ones(self.C)/self.C,size=self.N) #[N,C]
         self.hp_cent_cgsc = np.sum(self.y_cgsc,axis=0)+self.cent #[C]
@@ -291,7 +303,10 @@ class Poisson_Mixture:
         self.hp_scale_cgsc = self.scale+np.sum(self.y_cgsc,axis=0)[:,np.newaxis] #[C,D]
         
     
-    def CollapsedGibbsSampling(self,ITER=500):
+    def CollapsedGibbsSampling(self,ITER=500,seed=None):
+        
+        if seed:
+            np.random.seed(seed)
         
         for k in tqdm(range(ITER)):
             self.Collapsed_cycle()
@@ -299,7 +314,7 @@ class Poisson_Mixture:
         
 
 
-# In[160]:
+# In[27]:
 
 
 def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER=10000,seed=None):
@@ -310,7 +325,7 @@ def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER=10000,seed=None):
     print('done.\ntrue parameter :\n',pm.mr_t,'\n',pm.tens_t)
 
     print('\nset model...')
-    pm.set_model(C,10*np.ones(C)+1/(10**np.arange(C)),np.ones((C,D)),D*np.ones((C,D)),seed)
+    pm.set_model(C,seed)
     print('done.')
 
     print('\ntry Gibbs sampling...')
