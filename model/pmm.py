@@ -21,12 +21,13 @@ import warnings
 # warnings.filterwarnings('ignore')
 
 
-# In[26]:
+# In[40]:
 
 
 class Poisson_Mixture:
     
     '''
+    
     this class is initialized optimally for args.
     there are three ways to initialize.
     
@@ -220,17 +221,26 @@ class Poisson_Mixture:
                         spsp.factorial(self.bin_label[np.newaxis,:,np.newaxis,:])/\
                         np.exp(self.tens_gsc[:,np.newaxis,:,:]),axis=3)
     
-    def GibbsSampling(self,ITER=500,seed=None):
+    def GibbsSampling(self,ITER=500,burnin=None,seed=None):
         
         if seed:
             np.random.seed(seed)
+            
+        if burnin==None:
+            burnin = self.N
+            
+        print('burn-in...')
+        for k in tqdm(range(burnin)):
+            self.Gibbs_cycle()
         
+        print('sampling...')
         self.mr_GS = np.zeros((ITER,self.L,self.C)) #[I,L,C]
         self.tens_GS = np.zeros((ITER,self.L,self.C,self.D)) #[I,L,C,D]
         for k in tqdm(range(ITER)):
             self.Gibbs_cycle()
             self.mr_GS[k,:,:] = self.mr_gsc
             self.tens_GS[k,:,:,:] = self.tens_gsc
+
   
     def set_VI(self):
         
@@ -303,42 +313,22 @@ class Poisson_Mixture:
         self.hp_scale_cgsc = self.scale+np.sum(self.y_cgsc,axis=0)[:,np.newaxis] #[C,D]
         
     
-    def CollapsedGibbsSampling(self,ITER=500,seed=None):
+    def CollapsedGibbsSampling(self,ITER=500,burnin=None,seed=None):
         
         if seed:
             np.random.seed(seed)
         
+        if burnin==None:
+            burnin = self.N
+        
+        print('burn-in...')
+        for k in tqdm(range(burnin)):
+            self.Collapsed_cycle()
+        
+        self.y_CGS = np.zeros((ITER,self.N,self.C)) #[I,N,C]
+        print('sampling...')
         for k in tqdm(range(ITER)):
             self.Collapsed_cycle()
+            self.y_CGS[k,:,:] = self.y_cgsc
+
     
-        
-
-
-# In[27]:
-
-
-def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER=10000,seed=None):
-
-
-    print('generate model...')
-    pm = Poisson_Mixture(C_t,D,N,seed)
-    print('done.\ntrue parameter :\n',pm.mr_t,'\n',pm.tens_t)
-
-    print('\nset model...')
-    pm.set_model(C,seed)
-    print('done.')
-
-    print('\ntry Gibbs sampling...')
-    pm.GibbsSampling(ITER)
-    print('done.\nGibbs sample mean:\n',np.mean(pm.mr_GS,axis=(0,1)),'\n',np.mean(pm.tens_GS,axis=(0,1)))
-
-    print('\ntry variational inference...')
-    pm.VariationalInference(ITER)
-    print('done.\nhyper parameter :\n',pm.hp_cent_vic,'\n',pm.hp_shape_vic*pm.hp_scale_vic)
-    
-    print('\ntry collapsed Gibbs sampling...')
-    pm.CollapsedGibbsSampling(ITER)
-    print('done.\nhyper parameter :\n',pm.hp_cent_cgsc,'\n',pm.hp_shape_cgsc/pm.hp_scale_cgsc)
-    
-
-
