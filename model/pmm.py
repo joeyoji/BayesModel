@@ -21,7 +21,7 @@ import warnings
 # warnings.filterwarnings('ignore')
 
 
-# In[103]:
+# In[2]:
 
 
 class Poisson_Mixture:
@@ -247,16 +247,19 @@ class Poisson_Mixture:
         fig,axes = plt.subplots(self.C,self.D+1,figsize=(6*(self.D+1),6*self.C))
         fig.suptitle('posterior distribution (Gibbs sampling)')
         
+        a = self.mr_GS.reshape(-1,self.C)
+        B = self.tens_GS.reshape(-1,self.C,self.D)
+        
         for c in range(self.C):
-            degrees,spaces,_ = axes[c,0].hist(self.mr_GS.reshape(-1,self.C)[:,c],bins=round(np.sqrt(np.size(a,axis=0))),linewidth=0,color=plt.cm.tab10(0))
+            degrees,spaces,_ = axes[c,0].hist(a[:,c],bins=round(np.sqrt(np.size(a,axis=0))),linewidth=0,color=plt.cm.tab10(0))
             ytic = np.linspace(0,np.max(degrees),6)
             yticlab = np.linspace(0,np.max(degrees/np.sum((spaces[1]-spaces[0])*degrees)),6)*100//1/100
             axes[c,0].set(xlim=(0,1),xlabel=f'mr_{c}',yticks=ytic,yticklabels=yticlab)
             for d in range(self.D):
-                degrees,spaces,_ = axes[c,d+1].hist(self.tens_GS.reshape(-1,self.C,self.D)[:,c,d],bins=round(np.sqrt(np.size(a,axis=0))),linewidth=0,color=plt.cm.tab10(d+1))
+                degrees,spaces,_ = axes[c,d+1].hist(B[:,c,d],bins=round(np.sqrt(np.size(B,axis=0))),linewidth=0,color=plt.cm.tab10(d+1))
                 ytic = np.linspace(0,np.max(degrees),6)
                 yticlab = np.linspace(0,np.max(degrees/np.sum((spaces[1]-spaces[0])*degrees)),6)*100//1/100
-                axes[c,d+1].set(xlim=(0,np.max(self.tens_GS.reshape(-1,self.C,self.D),axis=(0,1))[d]),xlabel=f'tens_{c},{d}',yticks=ytic,yticklabels=yticlab)
+                axes[c,d+1].set(xlim=(0,np.max(B,axis=(0,1))[d]),xlabel=f'tens_{c},{d}',yticks=ytic,yticklabels=yticlab)
 
         if save:
             fig.savefig('posterior_GS_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')        
@@ -351,7 +354,6 @@ class Poisson_Mixture:
             self.Collapsed_cycle()
             self.y_CGS[k,:,:] = self.y_cgsc
 
-    
 
 
 def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER_gs=10000,ITER_vi=10000,ITER_cgs=1000,seed=None):
@@ -376,5 +378,3 @@ def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER_gs=10000,ITER_vi=10000,ITER_cgs=100
     print('\ntry collapsed Gibbs sampling...')
     pm.CollapsedGibbsSampling(ITER_cgs)
     print('done.\nhyper parameter :\n',pm.hp_cent_cgsc,'\n',pm.hp_shape_cgsc/pm.hp_scale_cgsc)
-    
-
