@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[4]:
+# In[1]:
 
 
 # import tools
@@ -21,7 +21,7 @@ import warnings
 # warnings.filterwarnings('ignore')
 
 
-# In[40]:
+# In[103]:
 
 
 class Poisson_Mixture:
@@ -240,6 +240,26 @@ class Poisson_Mixture:
             self.Gibbs_cycle()
             self.mr_GS[k,:,:] = self.mr_gsc
             self.tens_GS[k,:,:,:] = self.tens_gsc
+            
+    
+    def view_Gibbs_sample(self,save=False):
+        
+        fig,axes = plt.subplots(self.C,self.D+1,figsize=(6*(self.D+1),6*self.C))
+        fig.suptitle('posterior distribution (Gibbs sampling)')
+        
+        for c in range(self.C):
+            degrees,spaces,_ = axes[c,0].hist(self.mr_GS.reshape(-1,self.C)[:,c],bins=round(np.sqrt(np.size(a,axis=0))),linewidth=0,color=plt.cm.tab10(0))
+            ytic = np.linspace(0,np.max(degrees),6)
+            yticlab = np.linspace(0,np.max(degrees/np.sum((spaces[1]-spaces[0])*degrees)),6)*100//1/100
+            axes[c,0].set(xlim=(0,1),xlabel=f'mr_{c}',yticks=ytic,yticklabels=yticlab)
+            for d in range(self.D):
+                degrees,spaces,_ = axes[c,d+1].hist(self.tens_GS.reshape(-1,self.C,self.D)[:,c,d],bins=round(np.sqrt(np.size(a,axis=0))),linewidth=0,color=plt.cm.tab10(d+1))
+                ytic = np.linspace(0,np.max(degrees),6)
+                yticlab = np.linspace(0,np.max(degrees/np.sum((spaces[1]-spaces[0])*degrees)),6)*100//1/100
+                axes[c,d+1].set(xlim=(0,np.max(self.tens_GS.reshape(-1,self.C,self.D),axis=(0,1))[d]),xlabel=f'tens_{c},{d}',yticks=ytic,yticklabels=yticlab)
+
+        if save:
+            fig.savefig('posterior_GS_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')        
 
   
     def set_VI(self):
@@ -332,3 +352,49 @@ class Poisson_Mixture:
             self.y_CGS[k,:,:] = self.y_cgsc
 
     
+        
+
+
+# In[114]:
+
+
+pm = Poisson_Mixture(2,2,1000,2022)
+
+pm.set_model(2,seed=2022)
+
+pm.GibbsSampling(10000)
+
+
+# In[115]:
+
+
+pm.view_Gibbs_sample()
+
+
+# In[41]:
+
+
+def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER_gs=10000,ITER_vi=10000,ITER_cgs=1000,seed=None):
+
+
+    print('generate model...')
+    pm = Poisson_Mixture(C_t,D,N,seed)
+    print('done.\ntrue parameter :\n',pm.mr_t,'\n',pm.tens_t)
+
+    print('\nset model...')
+    pm.set_model(C,seed)
+    print('done.')
+
+    print('\ntry Gibbs sampling...')
+    pm.GibbsSampling(ITER_gs)
+    print('done.\nGibbs sample mean:\n',np.mean(pm.mr_GS,axis=(0,1)),'\n',np.mean(pm.tens_GS,axis=(0,1)))
+
+    print('\ntry variational inference...')
+    pm.VariationalInference(ITER_vi)
+    print('done.\nhyper parameter :\n',pm.hp_cent_vic,'\n',pm.hp_shape_vic*pm.hp_scale_vic)
+    
+    print('\ntry collapsed Gibbs sampling...')
+    pm.CollapsedGibbsSampling(ITER_cgs)
+    print('done.\nhyper parameter :\n',pm.hp_cent_cgsc,'\n',pm.hp_shape_cgsc/pm.hp_scale_cgsc)
+    
+
