@@ -352,26 +352,6 @@ class Poisson_Mixture:
             self.y_CGS[k,:,:] = self.y_cgsc
 
     
-        
-
-
-# In[114]:
-
-
-pm = Poisson_Mixture(2,2,1000,2022)
-
-pm.set_model(2,seed=2022)
-
-pm.GibbsSampling(10000)
-
-
-# In[115]:
-
-
-pm.view_Gibbs_sample()
-
-
-# In[41]:
 
 
 def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER_gs=10000,ITER_vi=10000,ITER_cgs=1000,seed=None):
