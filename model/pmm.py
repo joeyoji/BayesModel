@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[12]:
 
 
 # import tools
@@ -21,7 +21,7 @@ import warnings
 # warnings.filterwarnings('ignore')
 
 
-# In[2]:
+# In[13]:
 
 
 class Poisson_Mixture:
@@ -181,16 +181,17 @@ class Poisson_Mixture:
             raise TypeError('the size of variables are not corresponding.')
     
     def set_GS(self,L=1,seed=None):
-        
+              
         if seed:
             np.random.seed(seed)
 
         self.L = L
-        self.hp_pi_gsc = np.ones((L,self.N_b,self.C))/self.C #hi_pi_gsc[L,N_b,C]
+        self.hp_pi_gsc = np.ones((self.L,self.N_b,self.C))/self.C #hi_pi_gsc[L,N_b,C]
         
         #run one cycle
         self.Gibbs_cycle()
         
+    
     def Gibbs_cycle(self):
         
         self.y_gsc = np.zeros((self.L,self.N_b,self.C),dtype=int) #[L,N_b,C]
@@ -217,9 +218,10 @@ class Poisson_Mixture:
         self.tens_gsc = np.random.gamma(self.hp_shape_gsc,self.hp_scale_gsc) #[L,C,D]
         
         #calculate hp_pi_gsc
-        self.hp_pi_gsc = self.mr_gsc[:,np.newaxis,:]*np.prod((                        self.tens_gsc[:,np.newaxis,:,:]**                        self.bin_label[np.newaxis,:,np.newaxis,:])/
-                        spsp.factorial(self.bin_label[np.newaxis,:,np.newaxis,:])/\
-                        np.exp(self.tens_gsc[:,np.newaxis,:,:]),axis=3)
+        self.hp_pi_gsc = (self.mr_gsc[:,np.newaxis,:]*np.prod((                            self.tens_gsc[:,np.newaxis,:,:]**                            self.bin_label[np.newaxis,:,np.newaxis,:])/
+                            spsp.factorial(self.bin_label[np.newaxis,:,np.newaxis,:])/\
+                            np.exp(self.tens_gsc[:,np.newaxis,:,:]),axis=3)) #[L,N_b,C]
+    
     
     def GibbsSampling(self,ITER=500,burnin=None,seed=None):
         
@@ -249,6 +251,7 @@ class Poisson_Mixture:
         
         a = self.mr_GS.reshape(-1,self.C)
         B = self.tens_GS.reshape(-1,self.C,self.D)
+        print(a.shape,B.shape)
         
         for c in range(self.C):
             degrees,spaces,_ = axes[c,0].hist(a[:,c],bins=round(np.sqrt(np.size(a,axis=0))),linewidth=0,color=plt.cm.tab10(0))
@@ -262,7 +265,7 @@ class Poisson_Mixture:
                 axes[c,d+1].set(xlim=(0,np.max(B,axis=(0,1))[d]),xlabel=f'tens_{c},{d}',yticks=ytic,yticklabels=yticlab)
 
         if save:
-            fig.savefig('posterior_GS_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')        
+            fig.savefig('posterior_GS_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')
 
   
     def set_VI(self):
@@ -273,6 +276,7 @@ class Poisson_Mixture:
         
         #run one cycle
         self.Variational_cycle()
+    
     
     def Variational_cycle(self):
         
@@ -296,6 +300,7 @@ class Poisson_Mixture:
         for k in tqdm(range(ITER)):
             self.Variational_cycle()
     
+    
     def set_CGS(self,seed=None):
         
         if seed:
@@ -309,6 +314,7 @@ class Poisson_Mixture:
         
         self.Collapsed_cycle()
     
+    
     def Collapsed_cycle(self):
                 
         self.hp_cent_cgsc = self.hp_cent_cgsc[np.newaxis,:]-self.y_cgsc #[N,C]
@@ -320,7 +326,6 @@ class Poisson_Mixture:
 
         self.hp_pi_cgsc = self.hp_cent_cgsc*np.prod(nb_x,axis=2) #[N,C]
             
-
         self.y_cgsc = np.zeros((self.N,self.C),dtype=int) #[N,C]
         Wei = np.ones(self.N,dtype=int) #Wei[N]
         
@@ -354,6 +359,8 @@ class Poisson_Mixture:
             self.Collapsed_cycle()
             self.y_CGS[k,:,:] = self.y_cgsc
 
+    
+
 
 
 def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER_gs=10000,ITER_vi=10000,ITER_cgs=1000,seed=None):
@@ -378,3 +385,5 @@ def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER_gs=10000,ITER_vi=10000,ITER_cgs=100
     print('\ntry collapsed Gibbs sampling...')
     pm.CollapsedGibbsSampling(ITER_cgs)
     print('done.\nhyper parameter :\n',pm.hp_cent_cgsc,'\n',pm.hp_shape_cgsc/pm.hp_scale_cgsc)
+    
+
