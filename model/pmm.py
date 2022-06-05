@@ -21,7 +21,7 @@ import warnings
 # warnings.filterwarnings('ignore')
 
 
-# In[2]:
+# In[11]:
 
 
 class Poisson_Mixture:
@@ -192,7 +192,7 @@ class Poisson_Mixture:
         self.Gibbs_cycle()
         
     
-    def Gibbs_cycle(self):
+    def Gibbs_cycle(self,need_elbo=False):
         
         self.y_gsc = np.zeros((self.L,self.N_b,self.C),dtype=int) #[L,N_b,C]
         Wei = np.repeat([np.copy(self.bin_weight),],self.L,axis=0) #Wei[L,N_b]
@@ -221,9 +221,14 @@ class Poisson_Mixture:
         self.hp_pi_gsc = (self.mr_gsc[:,np.newaxis,:]*np.prod((                            self.tens_gsc[:,np.newaxis,:,:]**                            self.bin_label[np.newaxis,:,np.newaxis,:])/
                             spsp.factorial(self.bin_label[np.newaxis,:,np.newaxis,:])/\
                             np.exp(self.tens_gsc[:,np.newaxis,:,:]),axis=3)) #[L,N_b,C]
+        
+        if need_elbo:
+            return self.get_elbo('gs')
+        else:
+            return np.nan
     
     
-    def GibbsSampling(self,ITER=500,burnin=None,seed=None):
+    def GibbsSampling(self,ITER=500,burnin=None,need_elbo=False,seed=None):
         
         if seed:
             np.random.seed(seed)
@@ -238,8 +243,9 @@ class Poisson_Mixture:
         print('sampling...')
         self.mr_GS = np.zeros((ITER,self.L,self.C)) #[I,L,C]
         self.tens_GS = np.zeros((ITER,self.L,self.C,self.D)) #[I,L,C,D]
+        self.elbo_GS_trace = np.zeros(ITER) #[I]
         for k in tqdm(range(ITER)):
-            self.Gibbs_cycle()
+            self.elbo_GS_trace[k] = self.Gibbs_cycle(need_elbo)
             self.mr_GS[k,:,:] = self.mr_gsc
             self.tens_GS[k,:,:,:] = self.tens_gsc
             
@@ -274,10 +280,10 @@ class Poisson_Mixture:
         self.hp_scale_vic = self.scale #[C,D]
         
         #run one cycle
-        self.Variational_cycle()
+        self.Variational_cycle(False)
     
     
-    def Variational_cycle(self):
+    def Variational_cycle(self,need_elbo=True):
         
         #calculate hp_pi_vic
         lmd_ex = self.hp_shape_vic*self.hp_scale_vic #[C,D]
@@ -292,16 +298,75 @@ class Poisson_Mixture:
         
         #calculate hp_cent_vic
         self.hp_cent_vic = np.sum(self.hp_pi_vic*self.bin_weight[:,np.newaxis],axis=0)+self.cent
+                
+        if need_elbo:
+            return self.get_elbo('vi')
+        else:
+            return np.nan
+        
+    
+    def get_elbo(self,method='vi'):
+        
+        if method=='gs':
+            hpi = self.hp_pi_gsc[0]/np.sum(self.hp_pi_gsc[0],axis=1)[:,np.newaxis] #[N_b,C]
+            hcent = self.hp_cent_gsc[0] #[C]
+            hshape = self.hp_shape_gsc[0] #[C,D]
+            hscale = self.hp_scale_gsc[0] #[C,D]
+            bwei = self.bin_weight #[N_b,C]
+            blab = self.bin_label #[N_b,D]
+        elif method=='vi':
+            hpi = self.hp_pi_vic
+            hcent = self.hp_cent_vic
+            hshape = self.hp_shape_vic
+            hscale = self.hp_scale_vic
+            bwei = self.bin_weight
+            blab = self.bin_label
+        elif method=='cgs':
+            hpi = self.hp_pi_cgsc/np.sum(self.hp_pi_cgsc,axis=1)[:,np.newaxis] #[N,C]
+            hcent = self.hp_cent_cgsc
+            hshape = self.hp_shape_cgsc
+            hscale = self.hp_scale_cgsc
+            bwei = 1 #[N,C]
+            blab = self.X_t #[N,D]
+        else:
+            raise ValueError("you can designate only 'gs', 'vi', and 'cgs' as method.")
+            
+        lmd_ex = hshape*hscale #[C,D]
+        ln_lmd_ex = spsp.digamma(hshape)+np.log(hscale) #[C,D]
+        ln_pi_ex = spsp.digamma(hcent)-spsp.digamma(np.sum(hcent)) #[C]
+        
+        #calculate poisson mixture elbo
+        ln_p_poi = np.sum(bwei*np.sum(hpi*np.sum(blab[:,np.newaxis,:]*ln_lmd_ex[np.newaxis,:,:]-                      np.log(spsp.factorial(blab[:,np.newaxis,:]))-lmd_ex[np.newaxis,:,:],axis=2),axis=1))
+        ln_p_cat = np.sum(bwei*np.sum(hpi*ln_pi_ex[np.newaxis,:],axis=1))
+        ln_q_cat = np.sum(bwei*np.sum(hpi*np.log(hpi),axis=1))
+        kl_qp_pi = np.sum(spsp.loggamma(self.cent))-spsp.loggamma(np.sum(self.cent))-                    (np.sum(spsp.loggamma(hcent))-spsp.loggamma(np.sum(hcent)))+                    np.sum((hcent-self.cent)*ln_pi_ex)
+        kl_qp_lambda = np.sum(spsp.loggamma(self.shape)+self.shape*np.log(self.scale))-                        np.sum(spsp.loggamma(hshape)+hshape*np.log(hscale))+                        np.sum((hshape-self.shape)*ln_lmd_ex)+                        np.sum((1/self.scale-1/hscale)*lmd_ex)
+
+        ELBO = ln_p_poi+ln_p_cat-ln_q_cat-kl_qp_lambda-kl_qp_pi
+
+        return ELBO
     
     
-    def VariationalInference(self,ITER=500):
+    def view_elbo(self,save=False):
+        
+        fig,ax = plt.subplots(1,1,figsize=(6,6))
+        ax.plot(self.elbo_GS_trace,label='GS')
+        ax.plot(self.elbo_VI_trace,label='VI')
+        ax.plot(self.elbo_CGS_trace,label='CGS')
+        ax.legend()
+        ax.set(title='ELBO',xlabel='iteration',xscale='log')
+        
+    
+    
+    def VariationalInference(self,ITER=500,need_elbo=True):
         
         self.hp_cent_VI_trace = np.zeros((ITER,self.C)) #[I,C]
         self.hp_shape_VI_trace = np.zeros((ITER,self.C,self.D)) #[I,C,D]
         self.hp_scale_VI_trace = np.zeros((ITER,self.C,self.D)) #[I,C,D]
+        self.elbo_VI_trace = np.zeros(ITER) #[I]
         
         for k in tqdm(range(ITER)):
-            self.Variational_cycle()
+            self.elbo_VI_trace[k] = self.Variational_cycle(need_elbo)
             self.hp_cent_VI_trace[k,:] = self.hp_cent_vic
             self.hp_shape_VI_trace[k,:,:] = self.hp_shape_vic
             self.hp_scale_VI_trace[k,:,:] = self.hp_scale_vic
@@ -317,10 +382,10 @@ class Poisson_Mixture:
 
         for c in range(self.C):
             axes[c,0].plot(a[:,c],color=plt.cm.tab10(0))
-            axes[c,0].set(xlabel=f'mr_{c}',ylim=(np.min(a)*0.9,np.max(a)*1.05))
+            axes[c,0].set(xlabel='iteration',ylabel=f'mr_{c}',ylim=(np.min(a)*0.9,np.max(a)*1.05))
             for d in range(self.D):
                 axes[c,d+1].plot(B[:,c,d],color=plt.cm.tab10(d+1))
-                axes[c,d+1].set(xlabel=f'tens_{c},{d}',ylim=(np.min(B,axis=(0,1))[d]*0.9,np.max(B,axis=(0,1))[d]*1.05))
+                axes[c,d+1].set(xlabel='iteration',ylabel=f'tens_{c},{d}',ylim=(np.min(B,axis=(0,1))[d]*0.9,np.max(B,axis=(0,1))[d]*1.05))
 
         if save:
             fig.savefig('transition_VI_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')
@@ -334,19 +399,19 @@ class Poisson_Mixture:
         self.y_cgsc = np.random.multinomial(1,np.ones(self.C)/self.C,size=self.N) #[N,C]
         self.hp_cent_cgsc = np.sum(self.y_cgsc,axis=0)+self.cent #[C]
         self.hp_shape_cgsc = np.sum(self.y_cgsc[:,:,np.newaxis]*self.X_t[:,np.newaxis,:],axis=0)+self.shape #[C,D]
-        self.hp_scale_cgsc = (self.scale+np.sum(self.y_cgsc,axis=0)[:,np.newaxis]) #[C,D]
+        self.hp_scale_cgsc = 1/(1/self.scale+np.sum(self.y_cgsc,axis=0)[:,np.newaxis]) #[C,D]
         #<<<
         
         self.Collapsed_cycle()
     
     
-    def Collapsed_cycle(self):
+    def Collapsed_cycle(self,need_elbo=False):
                 
         self.hp_cent_cgsc = self.hp_cent_cgsc[np.newaxis,:]-self.y_cgsc #[N,C]
         self.hp_shape_cgsc = self.hp_shape_cgsc[np.newaxis,:,:]-self.y_cgsc[:,:,np.newaxis]*self.X_t[:,np.newaxis,:] #[N,C,D]
-        self.hp_scale_cgsc = self.hp_scale_cgsc[np.newaxis,:,:]-self.y_cgsc[:,:,np.newaxis] #[N,C,D]
+        self.hp_scale_cgsc = 1/(1/self.hp_scale_cgsc[np.newaxis,:,:]-self.y_cgsc[:,:,np.newaxis]) #[N,C,D]
 
-        nb_p = 1/(1+self.hp_scale_cgsc) #[N,C,D]
+        nb_p = 1/(1+1/self.hp_scale_cgsc) #[N,C,D]
         nb_x = spsp.binom(self.X_t[:,np.newaxis,:]+self.hp_shape_cgsc-1,self.hp_shape_cgsc-1)*                    ((1-nb_p)**self.hp_shape_cgsc)*nb_p**self.X_t[:,np.newaxis,:]
 
         self.hp_pi_cgsc = self.hp_cent_cgsc*np.prod(nb_x,axis=2) #[N,C]
@@ -363,10 +428,15 @@ class Poisson_Mixture:
         
         self.hp_cent_cgsc = np.sum(self.y_cgsc,axis=0)+self.cent #[C]
         self.hp_shape_cgsc = np.sum(self.y_cgsc[:,:,np.newaxis]*self.X_t[:,np.newaxis,:],axis=0)+self.shape #[C,D]
-        self.hp_scale_cgsc = self.scale+np.sum(self.y_cgsc,axis=0)[:,np.newaxis] #[C,D]
+        self.hp_scale_cgsc = 1/(1/self.scale+np.sum(self.y_cgsc,axis=0)[:,np.newaxis]) #[C,D]
+        
+        if need_elbo:
+            return self.get_elbo('cgs')
+        else:
+            return np.nan
         
     
-    def CollapsedGibbsSampling(self,ITER=500,burnin=None,seed=None):
+    def CollapsedGibbsSampling(self,ITER=500,burnin=None,need_elbo=False,seed=None):
         
         if seed:
             np.random.seed(seed)
@@ -379,19 +449,20 @@ class Poisson_Mixture:
             self.Collapsed_cycle()
         
         self.y_CGS = np.zeros((ITER,self.N,self.C)) #[I,N,C]
+        self.elbo_CGS_trace = np.zeros(ITER) #[I]
         print('sampling...')
         for k in tqdm(range(ITER)):
-            self.Collapsed_cycle()
+            self.elbo_CGS_trace[k] = self.Collapsed_cycle(need_elbo)
             self.y_CGS[k,:,:] = self.y_cgsc
 
     
         
 
 
-# In[3]:
+# In[14]:
 
 
-def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER_gs=10000,ITER_vi=100,ITER_cgs=1000,seed=None):
+def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER=100,need_elbo=True,seed=None):
 
 
     print('generate model...')
@@ -403,15 +474,17 @@ def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER_gs=10000,ITER_vi=100,ITER_cgs=1000,
     print('done.')
 
     print('\ntry Gibbs sampling...')
-    pm.GibbsSampling(ITER_gs)
+    pm.GibbsSampling(ITER,burnin=0,need_elbo=need_elbo,seed=seed)
     print('done.\nGibbs sample mean:\n',np.mean(pm.mr_GS,axis=(0,1)),'\n',np.mean(pm.tens_GS,axis=(0,1)))
 
     print('\ntry variational inference...')
-    pm.VariationalInference(ITER_vi)
+    pm.VariationalInference(ITER,need_elbo=need_elbo)
     print('done.\nhyper parameter :\n',pm.hp_cent_vic,'\n',pm.hp_shape_vic*pm.hp_scale_vic)
     
     print('\ntry collapsed Gibbs sampling...')
-    pm.CollapsedGibbsSampling(ITER_cgs)
+    pm.CollapsedGibbsSampling(ITER,burnin=0,need_elbo=need_elbo,seed=seed)
     print('done.\nhyper parameter :\n',pm.hp_cent_cgsc,'\n',pm.hp_shape_cgsc/pm.hp_scale_cgsc)
+    
+    return pm
     
 
