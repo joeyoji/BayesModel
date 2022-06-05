@@ -21,7 +21,7 @@ import warnings
 # warnings.filterwarnings('ignore')
 
 
-# In[11]:
+# In[139]:
 
 
 class Poisson_Mixture:
@@ -456,10 +456,26 @@ class Poisson_Mixture:
             self.y_CGS[k,:,:] = self.y_cgsc
 
     
+    def view_Collapsed_assignment(self,save=False):
+        
+        fig,axes = plt.subplots(1,self.D,figsize=(6*self.D,6))
+        fig.suptitle('component assignment')
+        for d in range(self.D):
+            x = self.X_t[:,d]
+            y = self.y_cgsc
+            xlab = np.unique(x)
+            ydegree = np.add.accumulate(np.sum((y[:,np.newaxis,:]*(x[:,np.newaxis]==xlab)[:,:,np.newaxis]),axis=0),axis=1)
+            for c in range(self.C):
+                axes[d].bar(xlab,ydegree[:,self.C-c-1],linewidth=0,label=f'component {c}')
+                axes[d].set(ylabel='degree',xlabel=f'x_{d}')
+                if d==0:
+                    axes[d].legend()
+        if save:
+            fig.savefig('transition_VI_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')
         
 
 
-# In[14]:
+# In[140]:
 
 
 def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER=100,need_elbo=True,seed=None):
