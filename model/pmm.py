@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[12]:
+# In[1]:
 
 
 # import tools
@@ -21,7 +21,7 @@ import warnings
 # warnings.filterwarnings('ignore')
 
 
-# In[13]:
+# In[2]:
 
 
 class Poisson_Mixture:
@@ -251,7 +251,6 @@ class Poisson_Mixture:
         
         a = self.mr_GS.reshape(-1,self.C)
         B = self.tens_GS.reshape(-1,self.C,self.D)
-        print(a.shape,B.shape)
         
         for c in range(self.C):
             degrees,spaces,_ = axes[c,0].hist(a[:,c],bins=round(np.sqrt(np.size(a,axis=0))),linewidth=0,color=plt.cm.tab10(0))
@@ -297,8 +296,34 @@ class Poisson_Mixture:
     
     def VariationalInference(self,ITER=500):
         
+        self.hp_cent_VI_trace = np.zeros((ITER,self.C)) #[I,C]
+        self.hp_shape_VI_trace = np.zeros((ITER,self.C,self.D)) #[I,C,D]
+        self.hp_scale_VI_trace = np.zeros((ITER,self.C,self.D)) #[I,C,D]
+        
         for k in tqdm(range(ITER)):
             self.Variational_cycle()
+            self.hp_cent_VI_trace[k,:] = self.hp_cent_vic
+            self.hp_shape_VI_trace[k,:,:] = self.hp_shape_vic
+            self.hp_scale_VI_trace[k,:,:] = self.hp_scale_vic
+    
+    
+    def view_Variational_trace(self,save=False):
+        
+        fig,axes = plt.subplots(self.C,self.D+1,figsize=(6*(self.D+1),6*self.C))
+        fig.suptitle('parameter transition of variational inference')
+
+        a = self.hp_cent_VI_trace
+        B = self.hp_shape_VI_trace*self.hp_scale_VI_trace
+
+        for c in range(self.C):
+            axes[c,0].plot(a[:,c],color=plt.cm.tab10(0))
+            axes[c,0].set(xlabel=f'mr_{c}',ylim=(np.min(a)*0.9,np.max(a)*1.05))
+            for d in range(self.D):
+                axes[c,d+1].plot(B[:,c,d],color=plt.cm.tab10(d+1))
+                axes[c,d+1].set(xlabel=f'tens_{c},{d}',ylim=(np.min(B,axis=(0,1))[d]*0.9,np.max(B,axis=(0,1))[d]*1.05))
+
+        if save:
+            fig.savefig('transition_VI_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')
     
     
     def set_CGS(self,seed=None):
@@ -360,10 +385,13 @@ class Poisson_Mixture:
             self.y_CGS[k,:,:] = self.y_cgsc
 
     
+        
 
 
+# In[3]:
 
-def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER_gs=10000,ITER_vi=10000,ITER_cgs=1000,seed=None):
+
+def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER_gs=10000,ITER_vi=100,ITER_cgs=1000,seed=None):
 
 
     print('generate model...')
