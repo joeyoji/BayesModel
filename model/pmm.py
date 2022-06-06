@@ -21,7 +21,7 @@ import warnings
 # warnings.filterwarnings('ignore')
 
 
-# In[139]:
+# In[2]:
 
 
 class Poisson_Mixture:
@@ -71,6 +71,13 @@ class Poisson_Mixture:
 
     def load_data(self,data):
         
+        '''
+        
+        load data into this model.
+        the shape of data np.ndarray must be N x D, where N is the number of data and D is the dimension of data.
+        
+        '''
+        
         if len(data.shape)!=2:
             raise TypeError('the shape of data array must be N x D, where N is the number of data and D is the dimension of data.')
         else:
@@ -89,11 +96,34 @@ class Poisson_Mixture:
                 
     def bin_X_t(self):
         
+        '''
+        
+        bin data for fast calculation.
+        bin_label, which is N_b x D np.2darray, means unique data(X_t).
+        bin_weight, which is N_b np.1darray,  means the number of the unique data in X_t.
+        N_b means the number of unique data.
+        
+        '''
+        
         self.bin_label,self.bin_weight = np.unique(self.X_t,return_counts=True,axis=0)
         self.N_b = np.size(self.bin_weight)
             
         
     def set_true_parameter(self,arg1,arg2,seed=None):
+        
+        '''
+        
+        there are two arg type to set.
+        
+        [1] arg1 = mr[np.1darray], arg2 = tens[np.2darray]
+            
+            you can set np.2darrays as mixing ratio and intensity directly.
+        
+        [2] arg1 = C_t[int], arg2 = D[int]
+        
+            you can also ints as the number of true components and dimension.
+        
+        '''
         
         if type(arg1)==np.ndarray and type(arg2)==np.ndarray:
             self.set_true_parameter_by_array(arg1,arg2)
@@ -104,6 +134,22 @@ class Poisson_Mixture:
             
             
     def set_true_parameter_by_array(self,mr,tens):
+        
+        '''
+        
+        you can set true parameter by np.ndarray.
+        
+        ===== arguments =====
+        
+        [1] mr[np.1darray] ... mixing ratio
+        
+            expected shape (C_t,), where C_t is the number of true components.
+        
+        [2] tens[np.2darray] ... intensity of poisson distribution
+        
+            expected shape(C_t,D), where D is the dimension of data.
+        
+        '''
         
         if mr.shape[0]!=tens.shape[0]:
             raise TypeError('wrong args. check docstring.')
@@ -116,6 +162,22 @@ class Poisson_Mixture:
             
             
     def set_true_parameter_by_int(self,C_t,D,seed=None):
+        
+        '''
+        
+        you can set true parameter by ints.
+        but you cannot set true parameter arrays specifically by this method.
+        true parameter arrays are set randomly.
+        
+        ===== arguments =====
+        
+        [1] C_t[int] ... the number of true components
+        
+        [2] D[int] ... the dimension of data
+        
+        [3] seed[int or None] ... random seed to generate data
+        
+        '''
         
         if C_t<=0 or D<=0:
             raise TypeError('C_t and D must be greater than 0.')
@@ -130,6 +192,18 @@ class Poisson_Mixture:
         
         
     def generate_sample(self,N,seed=None):
+        
+        '''
+        
+        you can generate samples from Poisson mixture artificially.
+        
+        ===== arguments =====
+        
+        [1] N[int] ... the number of data
+        
+        [2] seed[int or None] ... random seed to generate data
+        
+        '''
                 
         if N<=0:
             raise TypeError('N must be greater than 0.')
@@ -144,6 +218,17 @@ class Poisson_Mixture:
 
         
     def view_data(self,save=False):
+        
+        '''
+        
+        you can visualize data loaded to this model.
+        data histogram are marginalized.
+        
+        ===== arguments =====
+        
+        [1] save[bool] ... save data graph
+        
+        '''
         
         fig,axes = plt.subplots(1,self.D,figsize=(6*self.D,6))
         fig.suptitle('data')
@@ -475,7 +560,7 @@ class Poisson_Mixture:
         
 
 
-# In[140]:
+# In[3]:
 
 
 def try_pmm_model(C_t=2,D=3,N=10000,C=2,ITER=100,need_elbo=True,seed=None):
