@@ -246,6 +246,24 @@ class Poisson_Mixture:
     
         
     def set_model(self,C,cent=None,shape=None,scale=None,seed=None):
+        
+        '''
+        
+        initialize Gibbs sample, variational approximated distribution, and collapsed Gibbs sample.
+        
+        ===== arugments =====
+        
+        [1] C[int] ... the number of model components, which differs from the number of true components(C_t)
+        
+        [2] cent[np.1darray or None] ... the hyper parameter of Dirichlet prior distribution ( array-shape (C,) )
+        
+        [3] shape[np.2darray or None] ... one of the hyper parameter of Gamma prior distribution ( array-shape (C,D) )
+        
+        [4] scale[np.2darray or None] ... the other of the hyper parameter of Gamma prior distribution ( array-shape (C,D) )
+        
+        [5] seed[int or None] ... random seed to set initial parameter
+        
+        '''
 
         if type(cent)==type(None):
             cent = 10*(np.ones(C)+1/(10**np.arange(C)))
@@ -266,6 +284,18 @@ class Poisson_Mixture:
             raise TypeError('the size of variables are not corresponding.')
     
     def set_GS(self,L=1,seed=None):
+        
+        '''
+        
+        initialize Gibbs sample
+        
+        ===== arguments =====
+        
+        [1] L[int] ... the number of parallel sample
+        
+        [2] seed[int or None] ... random seed to initialize Gibbs sample
+        
+        '''
               
         if seed:
             np.random.seed(seed)
@@ -278,6 +308,16 @@ class Poisson_Mixture:
         
     
     def Gibbs_cycle(self,need_elbo=False):
+        
+        '''
+        
+        turn one Gibbs sampling cycle
+        
+        ===== arguments =====
+        
+        [1] need_elbo[bool] ... if true, return ELBO(evidence lower bound),else np.nan.
+        
+        '''
         
         self.y_gsc = np.zeros((self.L,self.N_b,self.C),dtype=int) #[L,N_b,C]
         Wei = np.repeat([np.copy(self.bin_weight),],self.L,axis=0) #Wei[L,N_b]
@@ -315,6 +355,22 @@ class Poisson_Mixture:
     
     def GibbsSampling(self,ITER=500,burnin=None,need_elbo=False,seed=None):
         
+        '''
+        
+        run Gibbs sampling
+        
+        ===== arguments =====
+        
+        ITER[int] ... the number of times to turn GS for sampling
+        
+        burnin[int or None] ... the number of times to turn GS for stabilizing sample
+        
+        need_elbo[bool] ... whether return ELBO or not
+        
+        seed[int or None] ... random seed for Gibbs sampling
+        
+        '''
+        
         if seed:
             np.random.seed(seed)
             
@@ -336,6 +392,16 @@ class Poisson_Mixture:
             
     
     def view_Gibbs_sample(self,save=False):
+        
+        '''
+        
+        visiualize marginalized posterior distribution approximated by Gibbs sample
+        
+        ===== arguments =====
+        
+        [1] save[bool] ... whether save the graph or not
+        
+        '''
         
         fig,axes = plt.subplots(self.C,self.D+1,figsize=(6*(self.D+1),6*self.C))
         fig.suptitle('posterior distribution (Gibbs sampling)')
@@ -360,6 +426,12 @@ class Poisson_Mixture:
   
     def set_VI(self):
         
+        '''
+        
+        initialize variational approximated distribution
+        
+        '''
+        
         self.hp_cent_vic = self.cent #[C]
         self.hp_shape_vic = self.shape #[C,D]
         self.hp_scale_vic = self.scale #[C,D]
@@ -369,6 +441,16 @@ class Poisson_Mixture:
     
     
     def Variational_cycle(self,need_elbo=True):
+        
+        '''
+        
+        run one variational inference cycle
+        
+        ===== arguments =====
+        
+        [1] need_elbo[bool] ... if true, reutrn ELBO, or np.nan
+        
+        '''
         
         #calculate hp_pi_vic
         lmd_ex = self.hp_shape_vic*self.hp_scale_vic #[C,D]
@@ -391,6 +473,16 @@ class Poisson_Mixture:
         
     
     def get_elbo(self,method='vi'):
+        
+        '''
+        
+        calculate ELBO
+        
+        ===== arguments =====
+        
+        [1] method ['gs', 'vi', or 'cgs'] ... designate method
+        
+        '''
         
         if method=='gs':
             hpi = self.hp_pi_gsc[0]/np.sum(self.hp_pi_gsc[0],axis=1)[:,np.newaxis] #[N_b,C]
@@ -434,6 +526,16 @@ class Poisson_Mixture:
     
     def view_elbo(self,save=False):
         
+        '''
+        
+        visualize ELBO transition
+        
+        ===== arguments =====
+        
+        [1] save[bool] ... whether save the graph or not
+        
+        '''
+        
         fig,ax = plt.subplots(1,1,figsize=(6,6))
         ax.plot(self.elbo_GS_trace,label='GS')
         ax.plot(self.elbo_VI_trace,label='VI')
@@ -444,6 +546,18 @@ class Poisson_Mixture:
     
     
     def VariationalInference(self,ITER=500,need_elbo=True):
+        
+        '''
+        
+        run variational inference
+        
+        ===== arguments =====
+        
+        [1] ITER[int] ... the number of times to run variational infernce
+        
+        [2] need_elbo[bool] ... whether return ELBO or not
+        
+        '''
         
         self.hp_cent_VI_trace = np.zeros((ITER,self.C)) #[I,C]
         self.hp_shape_VI_trace = np.zeros((ITER,self.C,self.D)) #[I,C,D]
@@ -458,6 +572,16 @@ class Poisson_Mixture:
     
     
     def view_Variational_trace(self,save=False):
+        
+        '''
+        
+        visualize the transition trace of variational approximated distribution
+        
+        ===== arguments =====
+        
+        [1] save[bool] ... whether save the graph or not
+        
+        '''
         
         fig,axes = plt.subplots(self.C,self.D+1,figsize=(6*(self.D+1),6*self.C))
         fig.suptitle('parameter transition of variational inference')
@@ -478,6 +602,16 @@ class Poisson_Mixture:
     
     def set_CGS(self,seed=None):
         
+        '''
+        
+        initialize the collapsed Gibbs sample
+        
+        ===== arguments =====
+        
+        [1] seed[int or None] ... random seed to initialize collapsed Gibbs sample
+        
+        '''
+        
         if seed:
             np.random.seed(seed)
         #before>>>
@@ -491,6 +625,16 @@ class Poisson_Mixture:
     
     
     def Collapsed_cycle(self,need_elbo=False):
+        
+        '''
+        
+        run one collapsed Gibbs sampling cycle
+        
+        ===== arguments =====
+        
+        [1] need_elbo[bool] ... if true, return ELBO, or np.nan
+        
+        '''
                 
         self.hp_cent_cgsc = self.hp_cent_cgsc[np.newaxis,:]-self.y_cgsc #[N,C]
         self.hp_shape_cgsc = self.hp_shape_cgsc[np.newaxis,:,:]-self.y_cgsc[:,:,np.newaxis]*self.X_t[:,np.newaxis,:] #[N,C,D]
@@ -523,6 +667,23 @@ class Poisson_Mixture:
     
     def CollapsedGibbsSampling(self,ITER=500,burnin=None,need_elbo=False,seed=None):
         
+        '''
+        
+        run collapsed Gibbs sampling
+        
+        ===== arguments =====
+        
+        [1] ITER[int] ... the number of times to run CGS for sampling
+        
+        [2] burnin[int] ... the number of times to run CGS for stabilizing sample
+        
+        [3] need_elbo[bool] ... whether return ELBO or not
+        
+        [4] seed[int or None] ... random seed to run collapsed Gibbs sampling
+        
+        
+        '''
+        
         if seed:
             np.random.seed(seed)
         
@@ -542,6 +703,16 @@ class Poisson_Mixture:
 
     
     def view_Collapsed_assignment(self,save=False):
+        
+        '''
+        
+        visualize CGS estimated label assignment on data
+        
+        ===== arguments =====
+        
+        [1] save[bool] ... whether save the graph or not
+        
+        '''
         
         fig,axes = plt.subplots(1,self.D,figsize=(6*self.D,6))
         fig.suptitle('component assignment')
