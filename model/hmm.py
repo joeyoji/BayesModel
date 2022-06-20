@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[4]:
 
 
 # import tools
@@ -21,50 +21,186 @@ import warnings
 # warnings.filterwarnings('ignore')
 
 
-# In[2]:
+# In[5]:
 
 
-class Hidden_Markov:
+class data_generator:
     
-    '''
-    
-    this class is initialized optimally for args.
-    there are three ways to initialize.
-    
-    [1] (data[np.2darray]) ; one argument
-    
-        you can give this a np.2darray. given np.2darray is interpreted as data from Poisson mixture.
+    def __init__(self):
         
-    [2] (C_t[int], D[int], N[int] (, seed[int]) ) ; three(four) arguments
-
-        you can give this triple (quadruple) integers.
-        given integers are interpreted as the number of components in true distribution,
-        the dimension of data, and the number of data (,and random seed) respectively.
-        if you give them, true parameter and data from it are generated randomly.
-        you can use seed argument to fix randomness.
-
-    [3] (mr[np.1darray], tens[np.2darray], N[int] (, seed[int]) ) ; thee(four) arguments
-
-        you can give np.1darray, np.2darray, and integer(s).
-        first np.1darray is interpreted as mixing ratio, second np.2darray is done as intensity,
-        and third integer is done as the number of data (,and fourth integer is done as random seed).
-        the size of mr must correspond to the size of 0-axis of tens.
-        if you give them, data from designated true parameter is generated randomly.
-        you can use seed argument to fix randomness.
+        pass
     
-    '''
     
+    def generate(self,N,seed=None):
+        
+        self.N = N
+        
+        if seed:
+            np.random.seed(seed)
+
+
+# In[26]:
+
+
+class Poisson_generator(data_generator):
     
     def __init__(self,*args):
         
-        if len(args)==1 and type(args[0])==np.ndarray:
+        '''
+        there are some ways to initialize.
+        
+        [1] (tens[np.1darray],)
+        
+        set intensity directly.
+        
+        [2] (D[int],(seed[int]),)
+        
+        fix dimension and set intensity randomly.
+        you can fix seed.
+        
+        '''
+        
+        if type(args[0])==np.ndarray:            
+            self.set_true_by_arr(args[0])
+        elif type(args[0])==int:    
+            if len(args)>1:
+                if type(args[1])==int:
+                    self.set_true_by_int(args[0],args[1])
+                else:
+                    raise TypeError('seed should be int.')
+            else:
+                self.set_true_by_int(args[0])
+        else:
+            raise TypeError('you can put np.1darray or int to first arg.')
+            
+    
+    def set_true_by_arr(self,tens):
+        
+        if np.prod(tens>=0) and len(tens.shape)==1:
+            self.tens = tens
+            self.D = np.size(self.tens)
+        else:
+            raise TypeError('intensity should be non-negative and 1darray.')
+            
+        
+    def set_true_by_int(self,D,seed=None):
+        
+        if seed:
+            np.random.seed(seed)
+        if D>0:
+            self.D = D
+            self.tens = np.random.gamma(np.ones(D),D*np.ones(D),D)
+        else:
+            raise TypeError('dimension should be positive integer.')
+    
+    
+    def generate(self,N,seed=None):
+        
+        super().generate(N,seed)
+        self.data = np.random.poisson(self.tens,size=(self.N,self.D))
+        return self.data
+        
+
+
+# In[27]:
+
+
+Poisson_generator(5).generate(100)
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[101]:
+
+
+class Hidden_Markov_data_manager:
+    
+    
+    '''
+    
+    there are some ways to initialize.
+    initialization is done optimally for args.
+    
+    [1] (data,) - one argument
+    
+        data is np.2darray whose shape is N x D, where N is the length of data series and D is the dimension of data.
+        this way is for practical use.
+        
+    [2] (models,N,(ipv,tpm),(seed,)) - two ~ five argument(s)
+    
+        models is list of data generators.
+        N is the number of data.
+        ipv, which stands for initial probability vector, is np.1darray whose shape is S_t, where S_t is the number of states.
+        sum of ipv should be 1.
+        tpm, which stands for transition probability matrix, is np.2darray whose shape is S_t x S_t.
+        tpm_(i,j) means transition probability from state i to state j.
+        sum of each row vector of tpm should be 1.
+        ipv and tpm can be ommited. then, they are set randomly.
+        if you set seed, you can fix randomness.
+        this is for for experiment use.
+        
+    '''
+        
+    
+    def __init__(self,*args):
+        
+        if type(args[0])==np.ndarray:
+            
             self.load_data(args[0])
-        elif len(args)==3:
-            self.set_true_parameter(args[0],args[1])
-            self.generate_sample(args[2])
-        elif len(args)==4:
-            self.set_true_parameter(args[0],args[1],args[3])
-            self.generate_sample(args[2],args[3])
+            
+        elif type(args[0])==list:
+            
+            if len(args)==2:
+                
+                self.set_true(args[0],args[1]) #[models,N]
+                
+            elif len(args)==3:
+                
+                if type(args[2])==int:
+                
+                    self.set_true(args[0],args[1],seed=args[2]) #[models,N,seed]
+                    
+                elif type(args[2])==np.ndarray:
+                    
+                    if len(args[2].shape)==1:
+                        
+                        self.set_true(args[0],args[1],args[2]) #[models,N,ipv]
+                        
+                    elif len(args[2].shape)==2:
+                        
+                        self.set_true(args[0],args[1],tpm=args[2]) #[models,N,tpm]
+                
+            elif len(args)==4:
+            
+                if type(args[2])==np.ndarray and type(args[3])==np.ndarray:
+                    
+                    self.set_true(args[0],args[1],args[2],args[3]) #[models,N,ipv,tpm]
+                    
+                elif type(args[2])==np.ndarray and type(args[3])==int:
+                    
+                    if len(args[2].shape)==1:
+                        
+                        self.set_true(args[0],args[1],args[2],seed=args[3]) #[models,N,ipv,seed]
+                        
+                    elif len(args[2].shape)==2:
+                        
+                        self.set_true(args[0],args[1],tpm=args[2],seed=args[3]) #[models,N,tpm,seed]
+                
+                
+            elif len(args)==5:
+                
+                self.set_true(args[0],args[1],args[2],args[3],args[4]) #[models,N,ipv,tpm,seed]
+            
         else:
             raise TypeError('wrong args. check docstring.')
                                  
@@ -74,134 +210,93 @@ class Hidden_Markov:
         '''
         
         load data into this model.
-        the shape of data np.ndarray must be N x D, where N is the number of data and D is the dimension of data.
+        the shape of data np.2darray must be N x D, where N is the number of data and D is the dimension of data.
         
         '''
         
         if len(data.shape)!=2:
-            raise TypeError('the shape of data array must be N x D, where N is the number of data and D is the dimension of data.')
+            
+            raise TypeError('the shape of data must be N x D, where N is the number of data and D is the dimension of data.')
+            
         else:
             
-            self.C_t = None
-            self.mr_t = None
-            self.tens_t = None
+            self.S_t = None
+            self.ipv_t = None
+            self.tpm_t = None
+            self.models = None
             self.is_true_known = False
             
             self.X_t = data
             self.N = np.size(self.X_t,axis=0)
             self.D = np.size(self.X_t,axis=1)
             
-            self.bin_X_t()
-                    
-                
-    def bin_X_t(self):
+        
+    def set_true(self,models,N,ipv=None,tpm=None,seed=None):
         
         '''
         
-        bin data for fast calculation.
-        bin_label, which is N_b x D np.2darray, means unique data(X_t).
-        bin_weight, which is N_b np.1darray,  means the number of the unique data in X_t.
-        N_b means the number of unique data.
-        
-        '''
-        
-        self.bin_label,self.bin_weight = np.unique(self.X_t,return_counts=True,axis=0)
-        self.N_b = np.size(self.bin_weight)
-            
-        
-    def set_true_parameter(self,arg1,arg2,seed=None):
-        
-        '''
-        
-        there are two arg type to set.
-        
-        [1] arg1 = mr[np.1darray], arg2 = tens[np.2darray]
-            
-            you can set np.2darrays as mixing ratio and intensity directly.
-        
-        [2] arg1 = C_t[int], arg2 = D[int]
-        
-            you can also ints as the number of true components and dimension.
-        
-        '''
-        
-        if type(arg1)==np.ndarray and type(arg2)==np.ndarray:
-            self.set_true_parameter_by_array(arg1,arg2)
-        elif type(arg1)==int and type(arg2)==int:
-            self.set_true_parameter_by_int(arg1,arg2,seed)
-        else:
-            raise TypeError('wrong args. check docstring.')
-            
-            
-    def set_true_parameter_by_array(self,mr,tens):
-        
-        '''
-        
-        you can set true parameter by np.ndarray.
+        set true distribution.
         
         ===== arguments =====
         
-        [1] mr[np.1darray] ... mixing ratio
+        [1] models [list[data_generator]] - mandatory
         
-            expected shape (C_t,), where C_t is the number of true components.
-        
-        [2] tens[np.2darray] ... intensity of poisson distribution
-        
-            expected shape(C_t,D), where D is the dimension of data.
-        
-        '''
-        
-        if mr.shape[0]!=tens.shape[0]:
-            raise TypeError('wrong args. check docstring.')
-        else:
-            self.C_t = np.size(mr)
-            self.D = np.size(tens,axis=1)
-            self.mr_t = mr
-            self.tens_t = tens
-            self.is_true_known = True
+            list of data generator.
             
+        [2] N [int] - mandatory
+        
+            the number of data.
             
-    def set_true_parameter_by_int(self,C_t,D,seed=None):
+        [3] ipv [np.1darray] - optional
+        
+            initial probability vector.
+            
+        [4] tpm [np.2darray] - optional
+        
+            transiton probability matrix.
+            
+        [5] seed [int] - optional
+        
+            random seed to generate artificial data.
         
         '''
         
-        you can set true parameter by ints.
-        but you cannot set true parameter arrays specifically by this method.
-        true parameter arrays are set randomly.
-        
-        ===== arguments =====
-        
-        [1] C_t[int] ... the number of true components
-        
-        [2] D[int] ... the dimension of data
-        
-        [3] seed[int or None] ... random seed to generate data
-        
-        '''
-        
-        if C_t<=0 or D<=0:
-            raise TypeError('C_t and D must be greater than 0.')
+        self.models = models
+        self.S_t = len(self.models)
         
         if seed:
             np.random.seed(seed)
             
-        mr = np.random.dirichlet(np.ones(C_t)) #[C_t]
-        tens = np.random.gamma(np.ones((C_t,D)),D*np.ones((C_t,D))) #[C_t,D]
-        
-        self.set_true_parameter_by_array(mr,tens)
-        
+        if ipv:
+            self.ipv_t = ipv
+        else:
+            self.ipv_t = np.random.dirichlet(np.ones(self.S_t)) #[S_t]
+            
+        if tpm:
+            self.tpm_t = tpm
+        else:
+            self.tpm_t = np.random.dirichlet(np.ones(self.S_t),self.S_t) #[S_t,S_t]
+            
+        self.is_true_known = True
+        print(self.tpm_t)
+        self.generate_sample(N,seed)
+
         
     def generate_sample(self,N,seed=None):
         
         '''
         
-        you can generate samples from Poisson mixture artificially.
+        you can generate sample series from Hidden Markov Model artificially.
         
         ===== arguments =====
         
-        [1] N[int] ... the number of data
+        [1] N[int] - mandatory
         
-        [2] seed[int or None] ... random seed to generate data
+            the number of data (the length of data series)
+        
+        [2] seed[int] - optional
+        
+            random seed to generate data
         
         '''
                 
@@ -211,10 +306,16 @@ class Hidden_Markov:
             np.random.seed(seed)
             
         self.N = N
-        self.y_t = np.random.multinomial(1,self.mr_t,size=self.N) #[N,C_t]
-        self.X_t = np.random.poisson(np.sum(self.tens_t[np.newaxis,:,:]*self.y_t[:,:,np.newaxis],axis=1)) #[N,D]
+        self.y_t = np.zeros((self.N,self.S_t),dtype=int)
+        self.X_t = []
+        self.y_t[0] = np.random.multinomial(1,self.ipv_t,) #set initial state
+        for n in tqdm(range(1,self.N)):
+            self.y_t[n] = np.random.multinomial(1,np.sum(self.y_t[n-1,:,np.newaxis]*self.tpm_t,axis=0))
+            self.X_t.append([self.models[np.where(self.y_t[n])[0][0]],])
+        self.X_t = np.array(self.X_t)
+        self.D = self.X_t.shape[1]
         
-        self.bin_X_t()
+        
 
         
     def view_data(self,save=False):
@@ -230,21 +331,42 @@ class Hidden_Markov:
         
         '''
         
-        fig,axes = plt.subplots(1,self.D,figsize=(6*self.D,6))
+        fig,axes = plt.subplots(1,self.D,figsize=(12,6*self.D))
         fig.suptitle('data')
         if self.D==1:
-            where, degree = np.unique(self.X_t[:,0],return_counts=True)
-            axes.bar(where,degree,color=plt.cm.tab10(0))
-            axes.set(xlabel=f'x_{0+1}',ylabel='degree')
-        if self.D>1:
+            
+            axes.plot(self.X_t[:,0],marker='d',linewidth=1,color=plt.cm.tab10(0))
+            axes.set(ylabel=f'x_{0+1}',xlabel='time')
+            
+        else:
+            
             for d in range(self.D):
-                where, degree = np.unique(self.X_t[:,d],return_counts=True)
-                axes[d].bar(where,degree,color=plt.cm.tab10(d))
-                axes[d].set(xlabel=f'x_{d+1}',ylabel='degree')
+                axes[d].plot(self.X_t[:,d],marker='d',linewidth=1,color=plt.cm.tab10(d))
+                axes[d].set(ylabel=f'x_{d+1}',xlabel='time')
+                
         if save:
-            fig.savefig('data_bar_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')
+            fig.savefig('data_plot_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')
     
-        
+
+
+# In[106]:
+
+
+hmdm = Hidden_Markov_data_manager([1,2,3,4],100)
+
+
+# In[107]:
+
+
+hmdm.view_data()
+
+
+# In[3]:
+
+
+class Hidden_Markov:
+    
+    
     def set_model(self,C,cent=None,shape=None,scale=None,seed=None):
         
         '''
@@ -729,6 +851,24 @@ class Hidden_Markov:
         if save:
             fig.savefig('transition_VI_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')
         
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
 
 
 # In[ ]:
