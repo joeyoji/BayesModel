@@ -21,12 +21,22 @@ import warnings
 # warnings.filterwarnings('ignore')
 
 
-# In[5]:
+# In[37]:
 
 
 class data_generator:
     
     def __init__(self):
+        
+        pass
+    
+    
+    def set_true_directly(self):
+        
+        pass
+    
+    
+    def set_true_randomly(self):
         
         pass
     
@@ -39,7 +49,7 @@ class data_generator:
             np.random.seed(seed)
 
 
-# In[26]:
+# In[38]:
 
 
 class Poisson_generator(data_generator):
@@ -61,20 +71,20 @@ class Poisson_generator(data_generator):
         '''
         
         if type(args[0])==np.ndarray:            
-            self.set_true_by_arr(args[0])
+            self.set_true_directly(args[0])
         elif type(args[0])==int:    
             if len(args)>1:
                 if type(args[1])==int:
-                    self.set_true_by_int(args[0],args[1])
+                    self.set_true_randomly(args[0],args[1])
                 else:
                     raise TypeError('seed should be int.')
             else:
-                self.set_true_by_int(args[0])
+                self.set_true_randomly(args[0])
         else:
             raise TypeError('you can put np.1darray or int to first arg.')
             
     
-    def set_true_by_arr(self,tens):
+    def set_true_directly(self,tens):
         
         if np.prod(tens>=0) and len(tens.shape)==1:
             self.tens = tens
@@ -83,7 +93,7 @@ class Poisson_generator(data_generator):
             raise TypeError('intensity should be non-negative and 1darray.')
             
         
-    def set_true_by_int(self,D,seed=None):
+    def set_true_randomly(self,D,seed=None):
         
         if seed:
             np.random.seed(seed)
@@ -102,16 +112,10 @@ class Poisson_generator(data_generator):
         
 
 
-# In[27]:
+# In[48]:
 
 
-Poisson_generator(5).generate(100)
-
-
-# In[ ]:
-
-
-
+#Poisson_generator(4,100).generate(10,100)
 
 
 # In[ ]:
