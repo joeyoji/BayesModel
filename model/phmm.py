@@ -21,7 +21,7 @@ import warnings
 # warnings.filterwarnings('ignore')
 
 
-# In[40]:
+# In[54]:
 
 
 class Poisson_Hidden_Markov_generator:
@@ -136,10 +136,10 @@ class Poisson_Hidden_Markov_generator:
                 axes[d].plot(self.data[:,d],marker='d',linewidth=1,color=plt.cm.tab10(d))
                 axes[d].set(ylabel=f'x_{d+1}',xlabel='time')   
         if save:
-            fig.savefig('data_plot_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')
+            fig.savefig('data_plot_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf',bbox_inches='tight', pad_inches=0)
 
 
-# In[53]:
+# In[55]:
 
 
 # ipv = np.ones(2)/2
