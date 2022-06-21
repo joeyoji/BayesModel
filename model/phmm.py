@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[4]:
+# In[1]:
 
 
 # import tools
@@ -21,307 +21,98 @@ import warnings
 # warnings.filterwarnings('ignore')
 
 
-# In[37]:
+# In[40]:
 
 
-class data_generator:
-    
-    def __init__(self):
-        
-        pass
-    
-    
-    def set_true_directly(self):
-        
-        pass
-    
-    
-    def set_true_randomly(self):
-        
-        pass
-    
-    
-    def generate(self,N,seed=None):
-        
-        self.N = N
-        
-        if seed:
-            np.random.seed(seed)
-
-
-# In[38]:
-
-
-class Poisson_generator(data_generator):
-    
-    def __init__(self,*args):
-        
-        '''
-        there are some ways to initialize.
-        
-        [1] (tens[np.1darray],)
-        
-        set intensity directly.
-        
-        [2] (D[int],(seed[int]),)
-        
-        fix dimension and set intensity randomly.
-        you can fix seed.
-        
-        '''
-        
-        if type(args[0])==np.ndarray:            
-            self.set_true_directly(args[0])
-        elif type(args[0])==int:    
-            if len(args)>1:
-                if type(args[1])==int:
-                    self.set_true_randomly(args[0],args[1])
-                else:
-                    raise TypeError('seed should be int.')
-            else:
-                self.set_true_randomly(args[0])
-        else:
-            raise TypeError('you can put np.1darray or int to first arg.')
-            
-    
-    def set_true_directly(self,tens):
-        
-        if np.prod(tens>=0) and len(tens.shape)==1:
-            self.tens = tens
-            self.D = np.size(self.tens)
-        else:
-            raise TypeError('intensity should be non-negative and 1darray.')
-            
-        
-    def set_true_randomly(self,D,seed=None):
-        
-        if seed:
-            np.random.seed(seed)
-        if D>0:
-            self.D = D
-            self.tens = np.random.gamma(np.ones(D),D*np.ones(D),D)
-        else:
-            raise TypeError('dimension should be positive integer.')
-    
-    
-    def generate(self,N,seed=None):
-        
-        super().generate(N,seed)
-        self.data = np.random.poisson(self.tens,size=(self.N,self.D))
-        return self.data
-        
-
-
-# In[48]:
-
-
-#Poisson_generator(4,100).generate(10,100)
-
-
-# In[ ]:
-
-
-
-
-
-# In[101]:
-
-
-class Hidden_Markov_data_manager:
-    
+class Poisson_Hidden_Markov_generator:
     
     '''
     
-    there are some ways to initialize.
+    there are two ways to initialize.
     initialization is done optimally for args.
     
-    [1] (data,) - one argument
+    [1] (ipv[np.1darray], tpm[np.2darray], tens[np.2darray]) - three arguments
     
-        data is np.2darray whose shape is N x D, where N is the length of data series and D is the dimension of data.
-        this way is for practical use.
+        ipv, tpm and tens mean Initial Probability Vector, Transition Probability Matrix and inTENSity respectively.
+        the shape of arguments are S, S x S and S x D respectively, 
+        where S is the number of hidden states and D is the dimension of data.
+        any element of any arguments must be non-negative.
+        the sum of ipv and any row of tpm must be 1 (or less).
         
-    [2] (models,N,(ipv,tpm),(seed,)) - two ~ five argument(s)
+    [2] (S[int], D[int], (seed[int])) - two (or three) arguments
     
-        models is list of data generators.
-        N is the number of data.
-        ipv, which stands for initial probability vector, is np.1darray whose shape is S_t, where S_t is the number of states.
-        sum of ipv should be 1.
-        tpm, which stands for transition probability matrix, is np.2darray whose shape is S_t x S_t.
-        tpm_(i,j) means transition probability from state i to state j.
-        sum of each row vector of tpm should be 1.
-        ipv and tpm can be ommited. then, they are set randomly.
-        if you set seed, you can fix randomness.
-        this is for for experiment use.
-        
+        ipv, tpm and tens are set randomly.
+        randomness can be fixed by seed.
+    
     '''
-        
     
     def __init__(self,*args):
         
-        if type(args[0])==np.ndarray:
-            
-            self.load_data(args[0])
-            
-        elif type(args[0])==list:
-            
-            if len(args)==2:
-                
-                self.set_true(args[0],args[1]) #[models,N]
-                
-            elif len(args)==3:
-                
-                if type(args[2])==int:
-                
-                    self.set_true(args[0],args[1],seed=args[2]) #[models,N,seed]
-                    
-                elif type(args[2])==np.ndarray:
-                    
-                    if len(args[2].shape)==1:
-                        
-                        self.set_true(args[0],args[1],args[2]) #[models,N,ipv]
-                        
-                    elif len(args[2].shape)==2:
-                        
-                        self.set_true(args[0],args[1],tpm=args[2]) #[models,N,tpm]
-                
-            elif len(args)==4:
-            
-                if type(args[2])==np.ndarray and type(args[3])==np.ndarray:
-                    
-                    self.set_true(args[0],args[1],args[2],args[3]) #[models,N,ipv,tpm]
-                    
-                elif type(args[2])==np.ndarray and type(args[3])==int:
-                    
-                    if len(args[2].shape)==1:
-                        
-                        self.set_true(args[0],args[1],args[2],seed=args[3]) #[models,N,ipv,seed]
-                        
-                    elif len(args[2].shape)==2:
-                        
-                        self.set_true(args[0],args[1],tpm=args[2],seed=args[3]) #[models,N,tpm,seed]
-                
-                
-            elif len(args)==5:
-                
-                self.set_true(args[0],args[1],args[2],args[3],args[4]) #[models,N,ipv,tpm,seed]
-            
+        if len(args)==3:
+            if type(args[0])==np.ndarray and type(args[1])==np.ndarray and type(args[2])==np.ndarray:
+                self.set_true_directly(args[0],args[1],args[2])
+            elif type(args[0])==int and type(args[1])==int and type(args[2])==int:
+                self.set_true_randomly(args[0],args[1],args[2])
+            else:
+                raise TypeError('if length of args is 3, args must be triplets of np.ndarray or int.')
+        elif len(args)==2:
+            if type(args[0])==int and type(args[1])==int:
+                self.set_true_randomly(args[0],args[1])
+            else:
+                raise TypeError('if length of args is 2, args must be pair of int.')
         else:
-            raise TypeError('wrong args. check docstring.')
-                                 
-
-    def load_data(self,data):
+            raise TypeError('length of args must be 3 or 2.')
+    
+    
+    def set_true_directly(self,ipv,tpm,tens):
         
-        '''
-        
-        load data into this model.
-        the shape of data np.2darray must be N x D, where N is the number of data and D is the dimension of data.
-        
-        '''
-        
-        if len(data.shape)!=2:
-            
-            raise TypeError('the shape of data must be N x D, where N is the number of data and D is the dimension of data.')
-            
+        if np.prod(ipv>=0) and np.prod(tpm>=0) and np.prod(tens>=0):
+            if np.sum(ipv)<=1 and np.prod(np.sum(tpm,axis=1)<=1):
+                if np.size(ipv)==np.size(tpm,axis=0) and np.size(ipv)==np.size(tpm,axis=1) and np.size(ipv)==np.size(tens,axis=0):
+                    self.S = np.size(ipv)
+                    self.D = np.size(tens,axis=1)
+                    self.ipv = ipv
+                    self.tpm = tpm
+                    self.tens = tens
+                else:
+                    raise TypeError('the shape of args must be S, S x S and S x D respectively.')
+            else:
+                raise TypeError('the sum of ipv and any row of tpm must be 1 (or less).')
         else:
+            raise TypeError('any element of any arg must be non-negative.')
             
-            self.S_t = None
-            self.ipv_t = None
-            self.tpm_t = None
-            self.models = None
-            self.is_true_known = False
-            
-            self.X_t = data
-            self.N = np.size(self.X_t,axis=0)
-            self.D = np.size(self.X_t,axis=1)
-            
+    
+    def set_true_randomly(self,S,D,seed=None):
         
-    def set_true(self,models,N,ipv=None,tpm=None,seed=None):
-        
-        '''
-        
-        set true distribution.
-        
-        ===== arguments =====
-        
-        [1] models [list[data_generator]] - mandatory
-        
-            list of data generator.
-            
-        [2] N [int] - mandatory
-        
-            the number of data.
-            
-        [3] ipv [np.1darray] - optional
-        
-            initial probability vector.
-            
-        [4] tpm [np.2darray] - optional
-        
-            transiton probability matrix.
-            
-        [5] seed [int] - optional
-        
-            random seed to generate artificial data.
-        
-        '''
-        
-        self.models = models
-        self.S_t = len(self.models)
+        if seed:
+            np.random.seed(seed)
+        if S>0 and D>0:
+            self.S = S
+            self.D = D
+            self.ipv = np.random.dirichlet(np.ones(self.S))
+            self.tpm = np.random.dirichlet(np.ones(self.S),self.S)
+            self.tens = np.random.gamma(np.ones((self.S,self.D)),D*np.ones((self.S,self.D)))
+        else:
+            raise TypeError('S and D must be positive integers.')
+    
+    
+    def generate(self,N,seed=None):
         
         if seed:
             np.random.seed(seed)
             
-        if ipv:
-            self.ipv_t = ipv
+        if N>0 and type(N)==int:
+            self.N = N
+            self.y = np.zeros((self.N,self.S),dtype=int)
+            self.y[0] = np.random.multinomial(1,self.ipv)
+            for n in tqdm(range(1,self.N)):
+                self.y[n] = np.random.multinomial(1,np.sum(self.y[n-1,:,np.newaxis]*self.tpm,axis=0))
+            self.data = np.random.poisson(np.sum(self.y[:,:,np.newaxis]*self.tens[np.newaxis,:,:],axis=1))
+            return self.data
         else:
-            self.ipv_t = np.random.dirichlet(np.ones(self.S_t)) #[S_t]
-            
-        if tpm:
-            self.tpm_t = tpm
-        else:
-            self.tpm_t = np.random.dirichlet(np.ones(self.S_t),self.S_t) #[S_t,S_t]
-            
-        self.is_true_known = True
-        print(self.tpm_t)
-        self.generate_sample(N,seed)
-
-        
-    def generate_sample(self,N,seed=None):
-        
-        '''
-        
-        you can generate sample series from Hidden Markov Model artificially.
-        
-        ===== arguments =====
-        
-        [1] N[int] - mandatory
-        
-            the number of data (the length of data series)
-        
-        [2] seed[int] - optional
-        
-            random seed to generate data
-        
-        '''
-                
-        if N<=0:
-            raise TypeError('N must be greater than 0.')
-        if seed:
-            np.random.seed(seed)
-            
-        self.N = N
-        self.y_t = np.zeros((self.N,self.S_t),dtype=int)
-        self.X_t = []
-        self.y_t[0] = np.random.multinomial(1,self.ipv_t,) #set initial state
-        for n in tqdm(range(1,self.N)):
-            self.y_t[n] = np.random.multinomial(1,np.sum(self.y_t[n-1,:,np.newaxis]*self.tpm_t,axis=0))
-            self.X_t.append([self.models[np.where(self.y_t[n])[0][0]],])
-        self.X_t = np.array(self.X_t)
-        self.D = self.X_t.shape[1]
-        
-        
-
-        
+            raise TypeError('N must be positive integers.')
+    
+    
     def view_data(self,save=False):
         
         '''
@@ -335,34 +126,30 @@ class Hidden_Markov_data_manager:
         
         '''
         
-        fig,axes = plt.subplots(1,self.D,figsize=(12,6*self.D))
+        fig,axes = plt.subplots(self.D,1,figsize=(0.1*self.N,6*self.D))
         fig.suptitle('data')
         if self.D==1:
-            
-            axes.plot(self.X_t[:,0],marker='d',linewidth=1,color=plt.cm.tab10(0))
+            axes.plot(self.data[:,0],marker='d',linewidth=1,color=plt.cm.tab10(0))
             axes.set(ylabel=f'x_{0+1}',xlabel='time')
-            
         else:
-            
             for d in range(self.D):
-                axes[d].plot(self.X_t[:,d],marker='d',linewidth=1,color=plt.cm.tab10(d))
-                axes[d].set(ylabel=f'x_{d+1}',xlabel='time')
-                
+                axes[d].plot(self.data[:,d],marker='d',linewidth=1,color=plt.cm.tab10(d))
+                axes[d].set(ylabel=f'x_{d+1}',xlabel='time')   
         if save:
             fig.savefig('data_plot_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')
-    
 
 
-# In[106]:
+# In[53]:
 
 
-hmdm = Hidden_Markov_data_manager([1,2,3,4],100)
-
-
-# In[107]:
-
-
-hmdm.view_data()
+# ipv = np.ones(2)/2
+# tpm = np.array([[0.95,0.05],[0.05,0.95]])
+# tens = np.array([[6,],[1,]])
+# seed = 2022
+# N = 200
+# phm = Poisson_Hidden_Markov_generator(ipv,tpm,tens)
+# phm.generate(N,seed)
+# phm.view_data()
 
 
 # In[3]:
