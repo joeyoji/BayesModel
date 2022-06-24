@@ -1,8 +1,12 @@
 # BayesModel
 
+* model/phmm.py
+
+    ポアソン隠れマルコフモデルを利用できます.
+    
 * model/pmm.py
 
-	Poisson Mixtureクラスが定義されています.
+	ポアソン混合モデルを利用できます.
 
 * tutorial_notebook.ipynb
 
