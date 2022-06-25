@@ -5,7 +5,7 @@
 
 
 # import tools
-get_ipython().run_line_magic('matplotlib', 'inline')
+# %matplotlib inline
 import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set()
@@ -21,7 +21,7 @@ import warnings
 # warnings.filterwarnings('ignore')
 
 
-# In[40]:
+# In[2]:
 
 
 class Poisson_Hidden_Markov_generator:
@@ -139,7 +139,7 @@ class Poisson_Hidden_Markov_generator:
             fig.savefig('data_plot_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf',bbox_inches='tight', pad_inches=0)
 
 
-# In[51]:
+# In[3]:
 
 
 class Poisson_Hidden_Markov:
@@ -314,34 +314,38 @@ class Poisson_Hidden_Markov:
             self.scale_cfVI_trace[k,:,:] = self.scale_cfvi
     
     
-    def view_Variational_trace(self,save=False):
+    def view_cfVI_trace(self,save=False):
         
-        pass
-#         '''
+        '''
         
-#         visualize the transition trace of variational approximated distribution
+        visualize the transition trace of variational approximated distribution
         
-#         ===== arguments =====
+        ===== arguments =====
         
-#         [1] save[bool] ... whether save the graph or not
+        [1] save[bool] ... whether save the graph or not
         
-#         '''
+        '''
         
-#         fig,axes = plt.subplots(self.C,self.D+1,figsize=(6*(self.D+1),6*self.C))
-#         fig.suptitle('parameter transition of variational inference')
+        fig,axes = plt.subplots(self.S,1+self.S+self.D,figsize=(6*(1+self.S+self.D),6*self.S))
+        fig.suptitle('parameter transition of variational inference')
 
-#         a = self.hp_cent_VI_trace
-#         B = self.hp_shape_VI_trace*self.hp_scale_VI_trace
+        a = self.cent_ipv_cfVI_trace
+        A = self.cent_tpm_cfVI_trace
+        B = self.shape_cfVI_trace*self.scale_cfVI_trace
 
-#         for c in range(self.C):
-#             axes[c,0].plot(a[:,c],color=plt.cm.tab10(0))
-#             axes[c,0].set(xlabel='iteration',ylabel=f'mr_{c}',ylim=(np.min(a)*0.9,np.max(a)*1.05))
-#             for d in range(self.D):
-#                 axes[c,d+1].plot(B[:,c,d],color=plt.cm.tab10(d+1))
-#                 axes[c,d+1].set(xlabel='iteration',ylabel=f'tens_{c},{d}',ylim=(np.min(B,axis=(0,1))[d]*0.9,np.max(B,axis=(0,1))[d]*1.05))
+        for c in range(self.S):
+            axes[c,0].plot(a[:,c],color=plt.cm.tab10(0))
+            axes[c,0].set(xlabel='iteration',ylabel=f'alpha_{c}',ylim=(np.min(a)*0.9,np.max(a)*1.05))
+            for s in range(self.S):
+                axes[c,s+1].plot(A[:,c,s],color=plt.cm.tab10(s+1))
+                axes[c,s+1].set(xlabel='iteration',ylabel=f'beta_{c},{s}',                                ylim=(np.min(A,axis=(0,1))[s]*0.9,np.max(A,axis=(0,1))[s]*1.05))
+            for d in range(self.D):
+                axes[c,1+self.S+d].plot(B[:,c,d],color=plt.cm.tab10(1+self.S+d))
+                axes[c,1+self.S+d].set(xlabel='iteration',ylabel=f'tens_{c},{d}',                                       ylim=(np.min(B,axis=(0,1))[d]*0.9,np.max(B,axis=(0,1))[d]*1.05))
 
-#         if save:
-#             fig.savefig('transition_VI_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')            
+        if save:
+            fig.savefig('transition_VI_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')
+            
             
     def view_elbo(self,save=False):
         
@@ -719,7 +723,7 @@ class Poisson_Hidden_Markov:
     
 
 
-# In[66]:
+# In[6]:
 
 
 # ipv = np.ones(2)/2
@@ -728,15 +732,13 @@ class Poisson_Hidden_Markov:
 # seed = 2022
 # N = 10000
 # phm = Poisson_Hidden_Markov_generator(ipv,tpm,tens)
-# phm.generate(N,seed)
-# phm.view_data()
+# xdata = phm.generate(N,seed)
 
-# phmm = Poisson_Hidden_Markov(phm.data,2)
+# phmm = Poisson_Hidden_Markov(xdata,2)
 
 # phmm.cfVI(ITER=50)
 
-# print(phmm.shape_cfvi*phmm.scale_cfvi)
-# print(phmm.cent_ipv_cfvi,"\n",phmm.cent_tpm_cfvi)
+# phmm.view_cfVI_trace()
 
 
 # In[ ]:
