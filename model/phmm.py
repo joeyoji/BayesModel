@@ -139,7 +139,7 @@ class Poisson_Hidden_Markov_generator:
             fig.savefig('data_plot_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf',bbox_inches='tight', pad_inches=0)
 
 
-# In[3]:
+# In[5]:
 
 
 class Poisson_Hidden_Markov:
@@ -220,7 +220,6 @@ class Poisson_Hidden_Markov:
 
     def set_cfVI(self):
         
-        
         '''
         
         initialize (completely factorized) variational approximated distribution.
@@ -235,12 +234,6 @@ class Poisson_Hidden_Markov:
         
         #run one cycle
         self.cfVariational_cycle(False)
-
-
-    def set_sVI(self):
-        
-        pass
-
     
     
     def cfVariational_cycle(self,need_elbo=False):
@@ -346,7 +339,129 @@ class Poisson_Hidden_Markov:
         if save:
             fig.savefig('transition_VI_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')
             
+
+    def set_sVI(self):
+        
+        '''
+        
+        initialize (structured) variational approximated distribution.
+        
+        '''
+        
+        self.cent_ipv_svi = self.cent_ipv #[S]
+        self.cent_tpm_svi = self.cent_tpm #[S,S]
+        self.shape_svi = self.shape #[S,D]
+        self.scale_svi = self.scale #[S,D]
+        self.eta_svi = np.random.dirichlet(np.ones(self.S),size=self.N) #[N,S]
+        self.etaeta_svi = np.random.dirichlet(np.ones(self.S),size=(self.N-1,self.S)) #[N-1,S,S]
+        
+        #run one cycle
+        self.sVariational_cycle()   
+        
+        
+    def sVariational_cycle(self):
+        
+        #calculate expected params
+        ex_lmd = self.shape_svi*self.scale_svi #[S,D]
+        ex_ln_lmd = spsp.digamma(self.shape_svi)+np.log(self.scale_svi) #[S,D]
+        ex_ln_pi = spsp.digamma(self.cent_ipv_svi)-spsp.digamma(np.sum(self.cent_ipv_svi)) #[S]
+        ex_ln_A = spsp.digamma(self.cent_tpm_svi)-spsp.digamma(np.sum(self.cent_tpm_svi,axis=1)) #[S,S]
+        #calculate expected hidden variables
+        forward = np.zeros((self.N,self.S)) #[N,S]
+        backward = np.zeros((self.N,self.S)) #[N,S]
+        forward[0,:] = np.exp(np.sum(self.data[0,np.newaxis,:]*ex_ln_lmd-ex_lmd,axis=1)+ex_ln_pi) #[S]
+        forward[0,:] /= np.sum(forward[0,:])
+        backward[-1,:] = np.ones(self.S)/self.S #[S]
+        for n in range(1,self.N):
+            forward[n,:] = np.exp(np.sum(self.data[n,np.newaxis,:]*ex_ln_lmd-ex_lmd,axis=1))*                                np.sum(np.exp(self.eta_svi[n-1,:,np.newaxis]*ex_ln_A)*forward[n-1,:,np.newaxis],axis=0) #[S]
+            forward[n,:] /= np.sum(forward[n,:])
+            backward[-n-1,:] = np.sum(np.exp(self.eta_svi[-n,:]*np.sum(self.data[-n,np.newaxis,:]*                                    ex_ln_lmd-ex_lmd,axis=1))[np.newaxis,:]*                                    np.exp(ex_ln_A*self.eta_svi[-n,np.newaxis,:])*backward[-n,np.newaxis,:],axis=1) #[S]
+            backward[-n-1,:] /= np.sum(backward[-n-1,:])
+        #calculated expected hidden variables
+        ex_s = forward*backward
+        ex_s /= np.sum(ex_s,axis=1)[:,np.newaxis] #[N,S]
+        ex_ss = np.exp(self.eta_svi[1:,:]*np.sum(self.data[1:,np.newaxis,:]*ex_ln_lmd[np.newaxis,:,:]-                        ex_lmd[np.newaxis,:,:],axis=2))[:,np.newaxis,:]*                        np.exp(ex_ln_A[np.newaxis,:,:])*forward[:-1,:,np.newaxis]*backward[1:,np.newaxis,:] #[N-1,S,S]
+        ex_ss /= np.sum(ex_ss,axis=(1,2))[:,np.newaxis,np.newaxis]
+        
+        #renew cauclate hyper params
+        #hyper params of Gamma
+        self.shape_svi = np.sum(ex_s[:,:,np.newaxis]*self.data[:,np.newaxis,:],axis=0)+self.shape #[S,D]
+        self.scale_svi = 1/(np.sum(ex_s,axis=0)[:,np.newaxis]+1/self.scale) #[S,D]
+        #hyper params of Dirichlet ( Initial Probability Vector )
+        self.cent_ipv_svi = ex_s[0,:]+self.cent_ipv #[S]
+        #hyper params of Dirichlet ( Transition Probability Matrix )
+        self.cent_tpm_svi = np.sum(ex_ss,axis=0)+self.cent_tpm #[S,S]
+        #hyper params of Categorical
+        self.eta_svi = ex_s #[N,S]
+        self.etaeta_svi = ex_ss #[N-1,S,S]
             
+
+    def sVI(self,ITER=500):
+        
+        '''
+        
+        run variational inference
+        
+        ===== arguments =====
+        
+        [1] ITER[int] ... the number of times to run variational infernce
+        
+        [2] need_elbo[bool] ... whether return ELBO or not ( currently not working )
+        
+        '''
+        
+        self.cent_ipv_sVI_trace = np.zeros((ITER,self.S)) #[I,S]
+        self.cent_tpm_sVI_trace = np.zeros((ITER,self.S,self.S)) #[I,S,S]
+        self.shape_sVI_trace = np.zeros((ITER,self.S,self.D)) #[I,S,D]
+        self.scale_sVI_trace = np.zeros((ITER,self.S,self.D)) #[I,S,D]
+        self.elbo_sVI_trace = np.zeros(ITER) #[I]
+        
+        for k in tqdm(range(ITER)):
+            self.sVariational_cycle()
+            self.cent_ipv_sVI_trace[k,:] = self.cent_ipv_svi
+            self.cent_tpm_sVI_trace[k,:,:] = self.cent_tpm_svi
+            self.shape_sVI_trace[k,:,:] = self.shape_svi
+            self.scale_sVI_trace[k,:,:] = self.scale_svi            
+            
+            
+    def view_sVI_trace(self,save=False):
+        
+        '''
+        
+        visualize the transition trace of variational approximated distribution
+        
+        ===== arguments =====
+        
+        [1] save[bool] ... whether save the graph or not
+        
+        '''
+        
+        fig,axes = plt.subplots(self.S,1+self.S+self.D,figsize=(6*(1+self.S+self.D),6*self.S))
+        fig.suptitle('parameter transition of variational inference')
+
+        a = self.cent_ipv_sVI_trace
+        A = self.cent_tpm_sVI_trace
+        B = self.shape_sVI_trace*self.scale_sVI_trace
+
+        for c in range(self.S):
+            axes[c,0].plot(a[:,c],color=plt.cm.tab10(0))
+            axes[c,0].set(xlabel='iteration',ylabel=f'alpha_{c}',ylim=(np.min(a)*0.9,np.max(a)*1.05))
+            for s in range(self.S):
+                axes[c,s+1].plot(A[:,c,s],color=plt.cm.tab10(s+1))
+                axes[c,s+1].set(xlabel='iteration',ylabel=f'beta_{c},{s}',                                ylim=(np.min(A,axis=(0,1))[s]*0.9,np.max(A,axis=(0,1))[s]*1.05))
+            for d in range(self.D):
+                axes[c,1+self.S+d].plot(B[:,c,d],color=plt.cm.tab10(1+self.S+d))
+                axes[c,1+self.S+d].set(xlabel='iteration',ylabel=f'tens_{c},{d}',                                       ylim=(np.min(B,axis=(0,1))[d]*0.9,np.max(B,axis=(0,1))[d]*1.05))
+
+        if save:
+            fig.savefig('transition_VI_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')
+            
+            
+            
+            
+            
+            
+
     def view_elbo(self,save=False):
         
         pass
@@ -723,22 +838,32 @@ class Poisson_Hidden_Markov:
     
 
 
-# In[6]:
+# In[7]:
 
 
-# ipv = np.ones(2)/2
-# tpm = np.array([[0.95,0.05],[0.05,0.95]])
-# tens = np.array([[6,],[1,]])
-# seed = 2022
-# N = 10000
-# phm = Poisson_Hidden_Markov_generator(ipv,tpm,tens)
-# xdata = phm.generate(N,seed)
+ipv = np.ones(2)/2
+tpm = np.array([[0.95,0.05],[0.05,0.95]])
+tens = np.array([[6,],[1,]])
+seed = 2022
+N = 10000
+phm = Poisson_Hidden_Markov_generator(ipv,tpm,tens)
+xdata = phm.generate(N,seed)
 
-# phmm = Poisson_Hidden_Markov(xdata,2)
+phmm = Poisson_Hidden_Markov(xdata,2)
 
-# phmm.cfVI(ITER=50)
+phmm.cfVI(ITER=30)
 
-# phmm.view_cfVI_trace()
+phmm.view_cfVI_trace()
+
+phmm.sVI(ITER=30)
+
+phmm.view_sVI_trace()
+
+
+# In[ ]:
+
+
+
 
 
 # In[ ]:
