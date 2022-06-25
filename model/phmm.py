@@ -139,7 +139,7 @@ class Poisson_Hidden_Markov_generator:
             fig.savefig('data_plot_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf',bbox_inches='tight', pad_inches=0)
 
 
-# In[5]:
+# In[3]:
 
 
 class Poisson_Hidden_Markov:
@@ -367,20 +367,22 @@ class Poisson_Hidden_Markov:
         ex_ln_pi = spsp.digamma(self.cent_ipv_svi)-spsp.digamma(np.sum(self.cent_ipv_svi)) #[S]
         ex_ln_A = spsp.digamma(self.cent_tpm_svi)-spsp.digamma(np.sum(self.cent_tpm_svi,axis=1)) #[S,S]
         #calculate expected hidden variables
+        ex_pss = np.exp(ex_ln_A) #[S,S]
+        ex_pxs = np.exp(np.sum(self.data[:,np.newaxis,:]*ex_ln_lmd[np.newaxis,:,:]-ex_lmd[np.newaxis,:,:],axis=2)) #[N,S]
         forward = np.zeros((self.N,self.S)) #[N,S]
         backward = np.zeros((self.N,self.S)) #[N,S]
-        forward[0,:] = np.exp(np.sum(self.data[0,np.newaxis,:]*ex_ln_lmd-ex_lmd,axis=1)+ex_ln_pi) #[S]
+        forward[0,:] = ex_pxs[0]*np.exp(ex_ln_pi) #[S]
         forward[0,:] /= np.sum(forward[0,:])
         backward[-1,:] = np.ones(self.S)/self.S #[S]
         for n in range(1,self.N):
-            forward[n,:] = np.exp(np.sum(self.data[n,np.newaxis,:]*ex_ln_lmd-ex_lmd,axis=1))*                                np.sum(np.exp(self.eta_svi[n-1,:,np.newaxis]*ex_ln_A)*forward[n-1,:,np.newaxis],axis=0) #[S]
+            forward[n,:] = ex_pxs[n,:]*np.sum(ex_pss*forward[n-1,:,np.newaxis],axis=0) #[S]
             forward[n,:] /= np.sum(forward[n,:])
-            backward[-n-1,:] = np.sum(np.exp(self.eta_svi[-n,:]*np.sum(self.data[-n,np.newaxis,:]*                                    ex_ln_lmd-ex_lmd,axis=1))[np.newaxis,:]*                                    np.exp(ex_ln_A*self.eta_svi[-n,np.newaxis,:])*backward[-n,np.newaxis,:],axis=1) #[S]
+            backward[-n-1,:] = np.sum(ex_pxs[-n,np.newaxis,:]*ex_pss*backward[-n,np.newaxis,:],axis=1) #[S]
             backward[-n-1,:] /= np.sum(backward[-n-1,:])
         #calculated expected hidden variables
         ex_s = forward*backward
         ex_s /= np.sum(ex_s,axis=1)[:,np.newaxis] #[N,S]
-        ex_ss = np.exp(self.eta_svi[1:,:]*np.sum(self.data[1:,np.newaxis,:]*ex_ln_lmd[np.newaxis,:,:]-                        ex_lmd[np.newaxis,:,:],axis=2))[:,np.newaxis,:]*                        np.exp(ex_ln_A[np.newaxis,:,:])*forward[:-1,:,np.newaxis]*backward[1:,np.newaxis,:] #[N-1,S,S]
+        ex_ss = ex_pxs[1:,np.newaxis,:]*ex_pss[np.newaxis,:,:]*forward[:-1,:,np.newaxis]*backward[1:,np.newaxis,:] #[N-1,S,S]
         ex_ss /= np.sum(ex_ss,axis=(1,2))[:,np.newaxis,np.newaxis]
         
         #renew cauclate hyper params
@@ -838,26 +840,26 @@ class Poisson_Hidden_Markov:
     
 
 
-# In[7]:
+# In[4]:
 
 
-ipv = np.ones(2)/2
-tpm = np.array([[0.95,0.05],[0.05,0.95]])
-tens = np.array([[6,],[1,]])
-seed = 2022
-N = 10000
-phm = Poisson_Hidden_Markov_generator(ipv,tpm,tens)
-xdata = phm.generate(N,seed)
+# ipv = np.ones(2)/2
+# tpm = np.array([[0.95,0.05],[0.05,0.95]])
+# tens = np.array([[6,],[1,]])
+# seed = 2022
+# N = 10000
+# phm = Poisson_Hidden_Markov_generator(ipv,tpm,tens)
+# xdata = phm.generate(N,seed)
 
-phmm = Poisson_Hidden_Markov(xdata,2)
+# phmm = Poisson_Hidden_Markov(xdata,2)
 
-phmm.cfVI(ITER=30)
+# phmm.cfVI(ITER=30)
 
-phmm.view_cfVI_trace()
+# phmm.view_cfVI_trace()
 
-phmm.sVI(ITER=30)
+# phmm.sVI(ITER=30)
 
-phmm.view_sVI_trace()
+# phmm.view_sVI_trace()
 
 
 # In[ ]:
