@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[2]:
+# In[1]:
 
 
 # import tools
@@ -21,7 +21,7 @@ import warnings
 # warnings.filterwarnings('ignore')
 
 
-# In[3]:
+# In[40]:
 
 
 class Poisson_Hidden_Markov_generator:
@@ -126,7 +126,7 @@ class Poisson_Hidden_Markov_generator:
         
         '''
         
-        fig,axes = plt.subplots(self.D,1,figsize=(0.1*self.N,6*self.D))
+        fig,axes = plt.subplots(self.D,1,figsize=(np.min([0.1*self.N,100]),6*self.D))
         fig.suptitle('data')
         if self.D==1:
             axes.plot(self.data[:,0],marker='d',linewidth=1,color=plt.cm.tab10(0))
@@ -139,20 +139,7 @@ class Poisson_Hidden_Markov_generator:
             fig.savefig('data_plot_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf',bbox_inches='tight', pad_inches=0)
 
 
-# In[4]:
-
-
-# ipv = np.ones(2)/2
-# tpm = np.array([[0.95,0.05],[0.05,0.95]])
-# tens = np.array([[6,],[1,]])
-# seed = 2022
-# N = 200
-# phm = Poisson_Hidden_Markov_generator(ipv,tpm,tens)
-# phm.generate(N,seed)
-# phm.view_data()
-
-
-# In[5]:
+# In[51]:
 
 
 class Poisson_Hidden_Markov:
@@ -161,6 +148,7 @@ class Poisson_Hidden_Markov:
     def __init__(self,data,S,cent_ipv=None,cent_tpm=None,shape=None,scale=None,seed=None):
         
         self.load_data(data)
+        self.set_model(S,cent_ipv,cent_tpm,shape,scale,seed)
         
     
     
@@ -169,49 +157,275 @@ class Poisson_Hidden_Markov:
         if type(data)==np.ndarray:
             if len(data.shape)==2:
                 self.data = data
+                self.N = np.size(data,axis=0)
+                self.D = np.size(data,axis=1)
             else:
                 raise TypeError('data must be N x D, where N is the length of data series and D is the dimension of data.')
         else:
             raise TypeError('type of data should be np.2darray.')
         
         
-    def set_model(self,C,cent=None,shape=None,scale=None,seed=None):
+    def set_model(self,S,cent_ipv=None,cent_tpm=None,shape=None,scale=None,seed=None):
         
         '''
         
-        initialize Gibbs sample, variational approximated distribution, and collapsed Gibbs sample.
+        initialize completely factorized and structured variational approximated distribution.
         
         ===== arugments =====
         
-        [1] C[int] ... the number of model components, which differs from the number of true components(C_t)
+        [1] S[int] ... the number of hidden states of the model.
         
-        [2] cent[np.1darray or None] ... the hyper parameter of Dirichlet prior distribution ( array-shape (C,) )
+        [2] cent_ipv[np.1darray] ... the hyper parameter of Dirichlet prior distribution (initial probability vector).
         
-        [3] shape[np.2darray or None] ... one of the hyper parameter of Gamma prior distribution ( array-shape (C,D) )
+        [3] cent_tpm[np.2darray] ... the hyper parameter of Dirichlet prior distribution (transition probability matrix).
         
-        [4] scale[np.2darray or None] ... the other of the hyper parameter of Gamma prior distribution ( array-shape (C,D) )
+        [3] shape[np.2darray] ... one of the hyper parameter of Gamma prior distribution ( array-shape (S,D) )
         
-        [5] seed[int or None] ... random seed to set initial parameter
+        [4] scale[np.2darray] ... the other of the hyper parameter of Gamma prior distribution ( array-shape (S,D) )
+        
+        [5] seed[int] ... random seed to set initial parameter
         
         '''
-
-        if type(cent)==type(None):
-            cent = 10*(np.ones(C)+1/(10**np.arange(C)))
+        if seed:
+            np.random.seed(seed)
+            
+        if type(cent_ipv)==type(None):
+            cent_ipv = np.random.uniform(size=S)
+        if type(cent_tpm)==type(None):
+            cent_tpm = np.random.uniform(size=(S,S))
         if type(shape)==type(None):
-            shape = np.ones((C,self.D))
+            shape = 2*np.random.uniform(size=(S,self.D))
         if type(scale)==type(None):
-            scale = self.D*np.ones((C,self.D))
+            scale = 2*self.D*np.random.uniform(size=(S,self.D))
         
-        if C==np.size(cent) and C==np.size(shape,axis=0) and C==np.size(scale,axis=0)            and self.D==np.size(shape,axis=1) and self.D==np.size(scale,axis=1):
-            self.C = C
-            self.cent = cent
-            self.shape = shape
-            self.scale = scale
-            self.set_GS(seed=seed)
-            self.set_VI()
-            self.set_CGS(seed=seed)
+        if S==np.size(cent_ipv) and S==np.size(cent_tpm,axis=0) and S==np.size(cent_tpm,axis=1)                and S==np.size(shape,axis=0) and S==np.size(scale,axis=0):
+            if np.size(shape,axis=1)==np.size(scale,axis=1):
+                self.S = S
+                self.cent_ipv = cent_ipv
+                self.cent_tpm = cent_tpm
+                self.shape = shape
+                self.scale = scale
+                self.set_VI()
+            else:
+                raise TypeError('the dimension of shape and scale are not corresponding.')
         else:
-            raise TypeError('the size of variables are not corresponding.')
+            raise TypeError('the number of hidden states are not corresponding among parameters.')
+
+
+    def set_VI(self):
+        
+        self.set_cfVI()
+        self.set_sVI()
+            
+
+    def set_cfVI(self):
+        
+        
+        '''
+        
+        initialize (completely factorized) variational approximated distribution.
+        
+        '''
+        
+        self.cent_ipv_cfvi = self.cent_ipv #[S]
+        self.cent_tpm_cfvi = self.cent_tpm #[S,S]
+        self.shape_cfvi = self.shape #[S,D]
+        self.scale_cfvi = self.scale #[S,D]
+        self.eta_cfvi = np.random.dirichlet(np.ones(self.S),size=self.N) #[N,S]
+        
+        #run one cycle
+        self.cfVariational_cycle(False)
+
+
+    def set_sVI(self):
+        
+        pass
+
+    
+    
+    def cfVariational_cycle(self,need_elbo=False):
+        
+        '''
+        
+        run one variational inference cycle
+        
+        ===== arguments =====
+        
+        [1] need_elbo[bool] ... if true, reutrn ELBO, or np.nan　(currently not working)
+        
+        '''
+        
+        #calculate expected params
+        ex_s = self.eta_cfvi #[N,S]
+        ex_lmd = self.shape_cfvi*self.scale_cfvi #[S,D]
+        ex_ln_lmd = spsp.digamma(self.shape_cfvi)+np.log(self.scale_cfvi) #[S,D]
+        ex_ln_pi = spsp.digamma(self.cent_ipv_cfvi)-spsp.digamma(np.sum(self.cent_ipv_cfvi)) #[S]
+        ex_ln_A = spsp.digamma(self.cent_tpm_cfvi)-spsp.digamma(np.sum(self.cent_tpm_cfvi,axis=1)) #[S,S]
+        
+        #cauclate hyper params
+        #hyper params of Gamma
+        self.shape_cfvi = np.sum(ex_s[:,:,np.newaxis]*self.data[:,np.newaxis,:],axis=0)+self.shape #[S,D]
+        self.scale_cfvi = 1/(np.sum(ex_s,axis=0)[:,np.newaxis]+1/self.scale) #[S,D]
+        #hyper params of Dirichlet ( Initial Probability Vector )
+        self.cent_ipv_cfvi = ex_s[0]+self.cent_ipv #[S]
+        #hyper params of Dirichlet ( Transition Probability Matrix )
+        self.cent_tpm_cfvi = np.sum(ex_s[:-1,:,np.newaxis]*ex_s[1:,np.newaxis,:],axis=0)+self.cent_tpm #[S,S]
+        #hyper params of Categorical ( Initial States )
+        self.eta_cfvi[0,:] = np.exp(np.sum(self.data[0,np.newaxis,:]*ex_ln_lmd-ex_lmd,axis=1)+                                    ex_ln_pi+np.sum(ex_ln_A*self.eta_cfvi[1,np.newaxis,:],axis=1)) #[S]
+        self.eta_cfvi[0,:] /= np.sum(self.eta_cfvi[0,:])
+        #hyper params of Categorical ( Midterm States )
+        self.eta_cfvi[1:-1,:] = np.exp(np.sum(self.data[1:-1,np.newaxis,:]*ex_ln_lmd-ex_lmd,axis=2)+                                    np.sum(self.eta_cfvi[:-2,:,np.newaxis]*ex_ln_A[np.newaxis,:,:],axis=1)+                                    np.sum(ex_ln_A[np.newaxis,:,:]*self.eta_cfvi[2:,np.newaxis,:],axis=2)) #[N-2,S]
+        self.eta_cfvi[1:-1,:] /= np.sum(self.eta_cfvi[1:-1,:],axis=1)[:,np.newaxis]
+        #hyper params of Categorical ( Final States )
+        self.eta_cfvi[-1,:] = np.exp(np.sum(self.data[-1,np.newaxis,:]*ex_ln_lmd-ex_lmd,axis=1)+                                    np.sum(self.eta_cfvi[-1,:,np.newaxis]*ex_ln_A,axis=0)) #[S]
+        self.eta_cfvi[-1,:] /= np.sum(self.eta_cfvi[-1,:])
+        
+        # if need_elbo:
+        #     return self.get_elbo('vi')
+        # else:
+        #     return np.nan
+
+        
+    def cfVI(self,ITER=500,need_elbo=False):
+        
+        '''
+        
+        run variational inference
+        
+        ===== arguments =====
+        
+        [1] ITER[int] ... the number of times to run variational infernce
+        
+        [2] need_elbo[bool] ... whether return ELBO or not ( currently not working )
+        
+        '''
+        
+        self.cent_ipv_cfVI_trace = np.zeros((ITER,self.S)) #[I,S]
+        self.cent_tpm_cfVI_trace = np.zeros((ITER,self.S,self.S)) #[I,S,S]
+        self.shape_cfVI_trace = np.zeros((ITER,self.S,self.D)) #[I,S,D]
+        self.scale_cfVI_trace = np.zeros((ITER,self.S,self.D)) #[I,S,D]
+        self.elbo_cfVI_trace = np.zeros(ITER) #[I]
+        
+        for k in tqdm(range(ITER)):
+            self.cfVariational_cycle(need_elbo)
+            self.cent_ipv_cfVI_trace[k,:] = self.cent_ipv_cfvi
+            self.cent_tpm_cfVI_trace[k,:,:] = self.cent_tpm_cfvi
+            self.shape_cfVI_trace[k,:,:] = self.shape_cfvi
+            self.scale_cfVI_trace[k,:,:] = self.scale_cfvi
+    
+    
+    def view_Variational_trace(self,save=False):
+        
+        pass
+#         '''
+        
+#         visualize the transition trace of variational approximated distribution
+        
+#         ===== arguments =====
+        
+#         [1] save[bool] ... whether save the graph or not
+        
+#         '''
+        
+#         fig,axes = plt.subplots(self.C,self.D+1,figsize=(6*(self.D+1),6*self.C))
+#         fig.suptitle('parameter transition of variational inference')
+
+#         a = self.hp_cent_VI_trace
+#         B = self.hp_shape_VI_trace*self.hp_scale_VI_trace
+
+#         for c in range(self.C):
+#             axes[c,0].plot(a[:,c],color=plt.cm.tab10(0))
+#             axes[c,0].set(xlabel='iteration',ylabel=f'mr_{c}',ylim=(np.min(a)*0.9,np.max(a)*1.05))
+#             for d in range(self.D):
+#                 axes[c,d+1].plot(B[:,c,d],color=plt.cm.tab10(d+1))
+#                 axes[c,d+1].set(xlabel='iteration',ylabel=f'tens_{c},{d}',ylim=(np.min(B,axis=(0,1))[d]*0.9,np.max(B,axis=(0,1))[d]*1.05))
+
+#         if save:
+#             fig.savefig('transition_VI_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')            
+            
+    def view_elbo(self,save=False):
+        
+        pass
+#         '''
+        
+#         visualize ELBO transition
+        
+#         ===== arguments =====
+        
+#         [1] save[bool] ... whether save the graph or not
+        
+#         '''
+        
+#         fig,ax = plt.subplots(1,1,figsize=(6,6))
+#         ax.plot(self.elbo_GS_trace,label='GS')
+#         ax.plot(self.elbo_VI_trace,label='VI')
+#         ax.plot(self.elbo_CGS_trace,label='CGS')
+#         ax.legend()
+#         ax.set(title='ELBO',xlabel='iteration',xscale='log')
+
+    def get_elbo(self,method='vi'):
+        
+        pass
+#         '''
+        
+#         calculate ELBO
+        
+#         ===== arguments =====
+        
+#         [1] method ['gs', 'vi', or 'cgs'] ... designate method
+        
+#         '''
+        
+#         if method=='gs':
+#             hpi = self.hp_pi_gsc[0]/np.sum(self.hp_pi_gsc[0],axis=1)[:,np.newaxis] #[N_b,C]
+#             hcent = self.hp_cent_gsc[0] #[C]
+#             hshape = self.hp_shape_gsc[0] #[C,D]
+#             hscale = self.hp_scale_gsc[0] #[C,D]
+#             bwei = self.bin_weight #[N_b,C]
+#             blab = self.bin_label #[N_b,D]
+#         elif method=='vi':
+#             hpi = self.hp_pi_vic
+#             hcent = self.hp_cent_vic
+#             hshape = self.hp_shape_vic
+#             hscale = self.hp_scale_vic
+#             bwei = self.bin_weight
+#             blab = self.bin_label
+#         elif method=='cgs':
+#             hpi = self.hp_pi_cgsc/np.sum(self.hp_pi_cgsc,axis=1)[:,np.newaxis] #[N,C]
+#             hcent = self.hp_cent_cgsc
+#             hshape = self.hp_shape_cgsc
+#             hscale = self.hp_scale_cgsc
+            # bwei = 1 #[N,C]
+#             blab = self.X_t #[N,D]
+#         else:
+#             raise ValueError("you can designate only 'gs', 'vi', and 'cgs' as method.")
+            
+#         lmd_ex = hshape*hscale #[C,D]
+#         ln_lmd_ex = spsp.digamma(hshape)+np.log(hscale) #[C,D]
+#         ln_pi_ex = spsp.digamma(hcent)-spsp.digamma(np.sum(hcent)) #[C]
+        
+#         #calculate poisson mixture elbo
+#         ln_p_poi = np.sum(bwei*np.sum(hpi*np.sum(blab[:,np.newaxis,:]*ln_lmd_ex[np.newaxis,:,:]-\
+#                       np.log(spsp.factorial(blab[:,np.newaxis,:]))-lmd_ex[np.newaxis,:,:],axis=2),axis=1))
+#         ln_p_cat = np.sum(bwei*np.sum(hpi*ln_pi_ex[np.newaxis,:],axis=1))
+#         ln_q_cat = np.sum(bwei*np.sum(hpi*np.log(hpi),axis=1))
+#         kl_qp_pi = np.sum(spsp.loggamma(self.cent))-spsp.loggamma(np.sum(self.cent))-\
+#                     (np.sum(spsp.loggamma(hcent))-spsp.loggamma(np.sum(hcent)))+\
+#                     np.sum((hcent-self.cent)*ln_pi_ex)
+#         kl_qp_lambda = np.sum(spsp.loggamma(self.shape)+self.shape*np.log(self.scale))-\
+#                         np.sum(spsp.loggamma(hshape)+hshape*np.log(hscale))+\
+#                         np.sum((hshape-self.shape)*ln_lmd_ex)+\
+#                         np.sum((1/self.scale-1/hscale)*lmd_ex)
+
+#         ELBO = ln_p_poi+ln_p_cat-ln_q_cat-kl_qp_lambda-kl_qp_pi
+
+#         return ELBO
+    
+
+    
+    
+    
+    
     
     def set_GS(self,L=1,seed=None):
         
@@ -365,195 +579,7 @@ class Poisson_Hidden_Markov:
 #             fig.savefig('posterior_GS_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')
 
   
-    def set_VI(self):
-        
-        pass
-#         '''
-        
-#         initialize variational approximated distribution
-        
-#         '''
-        
-#         self.hp_cent_vic = self.cent #[C]
-#         self.hp_shape_vic = self.shape #[C,D]
-#         self.hp_scale_vic = self.scale #[C,D]
-        
-#         #run one cycle
-#         self.Variational_cycle(False)
-    
-    
-    def Variational_cycle(self,need_elbo=True):
-        
-        pass
-#         '''
-        
-#         run one variational inference cycle
-        
-#         ===== arguments =====
-        
-#         [1] need_elbo[bool] ... if true, reutrn ELBO, or np.nan
-        
-#         '''
-        
-#         #calculate hp_pi_vic
-#         lmd_ex = self.hp_shape_vic*self.hp_scale_vic #[C,D]
-#         ln_lmd_ex = spsp.digamma(self.hp_shape_vic)+np.log(self.hp_scale_vic) #[C,D]
-#         ln_pi_ex = spsp.digamma(self.hp_cent_vic)-spsp.digamma(np.sum(self.hp_cent_vic)) #[C]
-#         self.hp_pi_vic = np.exp(ln_pi_ex)[np.newaxis,:]*np.prod(np.exp(\
-#                             self.bin_label[:,np.newaxis,:]*ln_lmd_ex[np.newaxis,:,:]-lmd_ex[np.newaxis,:,:]),axis=2) #[N_b,C]
-#         self.hp_pi_vic/=np.sum(self.hp_pi_vic,axis=1)[:,np.newaxis]
-        
-#         #calculate hp_shape_vic and hp_scale_vic
-#         self.hp_shape_vic = np.sum(self.hp_pi_vic[:,:,np.newaxis]*self.bin_label[:,np.newaxis,:]*\
-#                                    self.bin_weight[:,np.newaxis,np.newaxis],axis=0)+self.shape
-#         self.hp_scale_vic = self.scale/(1+np.sum(self.hp_pi_vic[:,:,np.newaxis]*\
-#                                                  self.bin_weight[:,np.newaxis,np.newaxis]*self.scale[np.newaxis,:,:],axis=0))
-        
-#         #calculate hp_cent_vic
-#         self.hp_cent_vic = np.sum(self.hp_pi_vic*self.bin_weight[:,np.newaxis],axis=0)+self.cent
-                
-#         if need_elbo:
-#             return self.get_elbo('vi')
-#         else:
-#             return np.nan
-        
-    
-    def get_elbo(self,method='vi'):
-        
-        pass
-#         '''
-        
-#         calculate ELBO
-        
-#         ===== arguments =====
-        
-#         [1] method ['gs', 'vi', or 'cgs'] ... designate method
-        
-#         '''
-        
-#         if method=='gs':
-#             hpi = self.hp_pi_gsc[0]/np.sum(self.hp_pi_gsc[0],axis=1)[:,np.newaxis] #[N_b,C]
-#             hcent = self.hp_cent_gsc[0] #[C]
-#             hshape = self.hp_shape_gsc[0] #[C,D]
-#             hscale = self.hp_scale_gsc[0] #[C,D]
-#             bwei = self.bin_weight #[N_b,C]
-#             blab = self.bin_label #[N_b,D]
-#         elif method=='vi':
-#             hpi = self.hp_pi_vic
-#             hcent = self.hp_cent_vic
-#             hshape = self.hp_shape_vic
-#             hscale = self.hp_scale_vic
-#             bwei = self.bin_weight
-#             blab = self.bin_label
-#         elif method=='cgs':
-#             hpi = self.hp_pi_cgsc/np.sum(self.hp_pi_cgsc,axis=1)[:,np.newaxis] #[N,C]
-#             hcent = self.hp_cent_cgsc
-#             hshape = self.hp_shape_cgsc
-#             hscale = self.hp_scale_cgsc
-            # bwei = 1 #[N,C]
-#             blab = self.X_t #[N,D]
-#         else:
-#             raise ValueError("you can designate only 'gs', 'vi', and 'cgs' as method.")
-            
-#         lmd_ex = hshape*hscale #[C,D]
-#         ln_lmd_ex = spsp.digamma(hshape)+np.log(hscale) #[C,D]
-#         ln_pi_ex = spsp.digamma(hcent)-spsp.digamma(np.sum(hcent)) #[C]
-        
-#         #calculate poisson mixture elbo
-#         ln_p_poi = np.sum(bwei*np.sum(hpi*np.sum(blab[:,np.newaxis,:]*ln_lmd_ex[np.newaxis,:,:]-\
-#                       np.log(spsp.factorial(blab[:,np.newaxis,:]))-lmd_ex[np.newaxis,:,:],axis=2),axis=1))
-#         ln_p_cat = np.sum(bwei*np.sum(hpi*ln_pi_ex[np.newaxis,:],axis=1))
-#         ln_q_cat = np.sum(bwei*np.sum(hpi*np.log(hpi),axis=1))
-#         kl_qp_pi = np.sum(spsp.loggamma(self.cent))-spsp.loggamma(np.sum(self.cent))-\
-#                     (np.sum(spsp.loggamma(hcent))-spsp.loggamma(np.sum(hcent)))+\
-#                     np.sum((hcent-self.cent)*ln_pi_ex)
-#         kl_qp_lambda = np.sum(spsp.loggamma(self.shape)+self.shape*np.log(self.scale))-\
-#                         np.sum(spsp.loggamma(hshape)+hshape*np.log(hscale))+\
-#                         np.sum((hshape-self.shape)*ln_lmd_ex)+\
-#                         np.sum((1/self.scale-1/hscale)*lmd_ex)
 
-#         ELBO = ln_p_poi+ln_p_cat-ln_q_cat-kl_qp_lambda-kl_qp_pi
-
-#         return ELBO
-    
-    
-    def view_elbo(self,save=False):
-        
-        pass
-#         '''
-        
-#         visualize ELBO transition
-        
-#         ===== arguments =====
-        
-#         [1] save[bool] ... whether save the graph or not
-        
-#         '''
-        
-#         fig,ax = plt.subplots(1,1,figsize=(6,6))
-#         ax.plot(self.elbo_GS_trace,label='GS')
-#         ax.plot(self.elbo_VI_trace,label='VI')
-#         ax.plot(self.elbo_CGS_trace,label='CGS')
-#         ax.legend()
-#         ax.set(title='ELBO',xlabel='iteration',xscale='log')
-        
-    
-    
-    def VariationalInference(self,ITER=500,need_elbo=True):
-        
-        pass
-#         '''
-        
-#         run variational inference
-        
-#         ===== arguments =====
-        
-#         [1] ITER[int] ... the number of times to run variational infernce
-        
-#         [2] need_elbo[bool] ... whether return ELBO or not
-        
-#         '''
-        
-#         self.hp_cent_VI_trace = np.zeros((ITER,self.C)) #[I,C]
-#         self.hp_shape_VI_trace = np.zeros((ITER,self.C,self.D)) #[I,C,D]
-#         self.hp_scale_VI_trace = np.zeros((ITER,self.C,self.D)) #[I,C,D]
-#         self.elbo_VI_trace = np.zeros(ITER) #[I]
-        
-#         for k in tqdm(range(ITER)):
-#             self.elbo_VI_trace[k] = self.Variational_cycle(need_elbo)
-#             self.hp_cent_VI_trace[k,:] = self.hp_cent_vic
-#             self.hp_shape_VI_trace[k,:,:] = self.hp_shape_vic
-#             self.hp_scale_VI_trace[k,:,:] = self.hp_scale_vic
-    
-    
-    def view_Variational_trace(self,save=False):
-        
-        pass
-#         '''
-        
-#         visualize the transition trace of variational approximated distribution
-        
-#         ===== arguments =====
-        
-#         [1] save[bool] ... whether save the graph or not
-        
-#         '''
-        
-#         fig,axes = plt.subplots(self.C,self.D+1,figsize=(6*(self.D+1),6*self.C))
-#         fig.suptitle('parameter transition of variational inference')
-
-#         a = self.hp_cent_VI_trace
-#         B = self.hp_shape_VI_trace*self.hp_scale_VI_trace
-
-#         for c in range(self.C):
-#             axes[c,0].plot(a[:,c],color=plt.cm.tab10(0))
-#             axes[c,0].set(xlabel='iteration',ylabel=f'mr_{c}',ylim=(np.min(a)*0.9,np.max(a)*1.05))
-#             for d in range(self.D):
-#                 axes[c,d+1].plot(B[:,c,d],color=plt.cm.tab10(d+1))
-#                 axes[c,d+1].set(xlabel='iteration',ylabel=f'tens_{c},{d}',ylim=(np.min(B,axis=(0,1))[d]*0.9,np.max(B,axis=(0,1))[d]*1.05))
-
-#         if save:
-#             fig.savefig('transition_VI_'+re.sub('[ :.-]','',str(datetime.datetime.today()))+'.pdf')
     
     
     def set_CGS(self,seed=None):
@@ -693,22 +719,24 @@ class Poisson_Hidden_Markov:
     
 
 
-# In[ ]:
+# In[66]:
 
 
+# ipv = np.ones(2)/2
+# tpm = np.array([[0.95,0.05],[0.05,0.95]])
+# tens = np.array([[6,],[1,]])
+# seed = 2022
+# N = 10000
+# phm = Poisson_Hidden_Markov_generator(ipv,tpm,tens)
+# phm.generate(N,seed)
+# phm.view_data()
 
+# phmm = Poisson_Hidden_Markov(phm.data,2)
 
+# phmm.cfVI(ITER=50)
 
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
-
-
+# print(phmm.shape_cfvi*phmm.scale_cfvi)
+# print(phmm.cent_ipv_cfvi,"\n",phmm.cent_tpm_cfvi)
 
 
 # In[ ]:
