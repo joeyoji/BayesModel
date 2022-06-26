@@ -8,7 +8,7 @@
 
 	ポアソン混合モデルを利用できます.
 
-* tutorial_notebook_phm.ipynb
+* tutorial_notebook_pmm.ipynb
 
 	Poisson Mixtureの使い方について粗方書かれています.
     
