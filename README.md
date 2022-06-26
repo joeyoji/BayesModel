@@ -8,6 +8,10 @@
 
 	ポアソン混合モデルを利用できます.
 
-* tutorial_notebook.ipynb
+* tutorial_notebook_phm.ipynb
 
 	Poisson Mixtureの使い方について粗方書かれています.
+    
+* tutorial_notebook_phmm.ipynb
+
+	Poisson Hidden Markovの使い方について粗方書かれています.
