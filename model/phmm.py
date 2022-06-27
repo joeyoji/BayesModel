@@ -263,16 +263,18 @@ class Poisson_Hidden_Markov:
         self.cent_ipv_cfvi = ex_s[0]+self.cent_ipv #[S]
         #hyper params of Dirichlet ( Transition Probability Matrix )
         self.cent_tpm_cfvi = np.sum(ex_s[:-1,:,np.newaxis]*ex_s[1:,np.newaxis,:],axis=0)+self.cent_tpm #[S,S]
+        new_eta = np.zeros((self.N,self.S))
         #hyper params of Categorical ( Initial States )
-        self.eta_cfvi[0,:] = np.exp(np.sum(self.data[0,np.newaxis,:]*ex_ln_lmd-ex_lmd,axis=1)+                                    ex_ln_pi+np.sum(ex_ln_A*self.eta_cfvi[1,np.newaxis,:],axis=1)) #[S]
-        self.eta_cfvi[0,:] /= np.sum(self.eta_cfvi[0,:])
+        new_eta[0,:] = np.exp(np.sum(self.data[0,np.newaxis,:]*ex_ln_lmd-ex_lmd,axis=1)+                                    ex_ln_pi+np.sum(ex_ln_A*ex_s[1,np.newaxis,:],axis=1)) #[S]
+        new_eta[0,:] /= np.sum(new_eta[0,:])
         #hyper params of Categorical ( Midterm States )
-        self.eta_cfvi[1:-1,:] = np.exp(np.sum(self.data[1:-1,np.newaxis,:]*ex_ln_lmd-ex_lmd,axis=2)+                                    np.sum(self.eta_cfvi[:-2,:,np.newaxis]*ex_ln_A[np.newaxis,:,:],axis=1)+                                    np.sum(ex_ln_A[np.newaxis,:,:]*self.eta_cfvi[2:,np.newaxis,:],axis=2)) #[N-2,S]
-        self.eta_cfvi[1:-1,:] /= np.sum(self.eta_cfvi[1:-1,:],axis=1)[:,np.newaxis]
+        new_eta[1:-1,:] = np.exp(np.sum(self.data[1:-1,np.newaxis,:]*ex_ln_lmd-ex_lmd,axis=2)+                                    np.sum(ex_s[:-2,:,np.newaxis]*ex_ln_A[np.newaxis,:,:],axis=1)+                                    np.sum(ex_ln_A[np.newaxis,:,:]*ex_s[2:,np.newaxis,:],axis=2)) #[N-2,S]
+        new_eta[1:-1,:] /= np.sum(new_eta[1:-1,:],axis=1)[:,np.newaxis]
         #hyper params of Categorical ( Final States )
-        self.eta_cfvi[-1,:] = np.exp(np.sum(self.data[-1,np.newaxis,:]*ex_ln_lmd-ex_lmd,axis=1)+                                    np.sum(self.eta_cfvi[-1,:,np.newaxis]*ex_ln_A,axis=0)) #[S]
-        self.eta_cfvi[-1,:] /= np.sum(self.eta_cfvi[-1,:])
-        
+        new_eta[-1,:] = np.exp(np.sum(self.data[-1,np.newaxis,:]*ex_ln_lmd-ex_lmd,axis=1)+                                    np.sum(ex_s[-1,:,np.newaxis]*ex_ln_A,axis=0)) #[S]
+        new_eta[-1,:] /= np.sum(new_eta[-1,:])
+        #renew
+        self.eta_cfvi = new_eta
         # if need_elbo:
         #     return self.get_elbo('vi')
         # else:
@@ -449,8 +451,8 @@ class Poisson_Hidden_Markov:
             axes[c,0].plot(a[:,c],color=plt.cm.tab10(0))
             axes[c,0].set(xlabel='iteration',ylabel=f'alpha_{c}',ylim=(np.min(a)*0.9,np.max(a)*1.05))
             for s in range(self.S):
-                axes[c,s+1].plot(A[:,c,s],color=plt.cm.tab10(s+1))
-                axes[c,s+1].set(xlabel='iteration',ylabel=f'beta_{c},{s}',                                ylim=(np.min(A,axis=(0,1))[s]*0.9,np.max(A,axis=(0,1))[s]*1.05))
+                axes[c,1+s].plot(A[:,c,s],color=plt.cm.tab10(s+1))
+                axes[c,1+s].set(xlabel='iteration',ylabel=f'beta_{c},{s}',                                ylim=(np.min(A,axis=(0,1))[s]*0.9,np.max(A,axis=(0,1))[s]*1.05))
             for d in range(self.D):
                 axes[c,1+self.S+d].plot(B[:,c,d],color=plt.cm.tab10(1+self.S+d))
                 axes[c,1+self.S+d].set(xlabel='iteration',ylabel=f'tens_{c},{d}',                                       ylim=(np.min(B,axis=(0,1))[d]*0.9,np.max(B,axis=(0,1))[d]*1.05))
@@ -843,23 +845,30 @@ class Poisson_Hidden_Markov:
 # In[4]:
 
 
-# ipv = np.ones(2)/2
-# tpm = np.array([[0.95,0.05],[0.05,0.95]])
-# tens = np.array([[6,],[1,]])
-# seed = 2022
-# N = 10000
-# phm = Poisson_Hidden_Markov_generator(ipv,tpm,tens)
-# xdata = phm.generate(N,seed)
+ipv = np.ones(2)/2
+tpm = np.array([[0.95,0.05],[0.05,0.95]])
+tens = np.array([[6,],[1,]])
+seed = 2022
+N = 10000
 
-# phmm = Poisson_Hidden_Markov(xdata,2)
+ipv = np.ones(3)/3
+tpm = np.array([[0.7,0.2,0.1],[0.3,0.4,0.3],[0.2,0.3,0.5]])
+tens = np.array([[16,1],[9,9],[1,16]])
+seed = 2022
+N = 10000
 
-# phmm.cfVI(ITER=30)
+phm = Poisson_Hidden_Markov_generator(ipv,tpm,tens)
+xdata = phm.generate(N,seed)
 
-# phmm.view_cfVI_trace()
+phmm = Poisson_Hidden_Markov(xdata,3)
 
-# phmm.sVI(ITER=30)
+phmm.cfVI(ITER=30)
 
-# phmm.view_sVI_trace()
+phmm.view_cfVI_trace()
+
+phmm.sVI(ITER=30)
+
+phmm.view_sVI_trace()
 
 
 # In[ ]:
