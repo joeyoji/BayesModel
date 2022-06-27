@@ -842,33 +842,33 @@ class Poisson_Hidden_Markov:
     
 
 
-# In[4]:
+# In[1]:
 
 
-ipv = np.ones(2)/2
-tpm = np.array([[0.95,0.05],[0.05,0.95]])
-tens = np.array([[6,],[1,]])
-seed = 2022
-N = 10000
+# ipv = np.ones(2)/2
+# tpm = np.array([[0.95,0.05],[0.05,0.95]])
+# tens = np.array([[6,],[1,]])
+# seed = 2022
+# N = 10000
 
-ipv = np.ones(3)/3
-tpm = np.array([[0.7,0.2,0.1],[0.3,0.4,0.3],[0.2,0.3,0.5]])
-tens = np.array([[16,1],[9,9],[1,16]])
-seed = 2022
-N = 10000
+# ipv = np.ones(3)/3
+# tpm = np.array([[0.7,0.2,0.1],[0.3,0.4,0.3],[0.2,0.3,0.5]])
+# tens = np.array([[16,1],[9,9],[1,16]])
+# seed = 2022
+# N = 10000
 
-phm = Poisson_Hidden_Markov_generator(ipv,tpm,tens)
-xdata = phm.generate(N,seed)
+# phm = Poisson_Hidden_Markov_generator(ipv,tpm,tens)
+# xdata = phm.generate(N,seed)
 
-phmm = Poisson_Hidden_Markov(xdata,3)
+# phmm = Poisson_Hidden_Markov(xdata,3)
 
-phmm.cfVI(ITER=30)
+# phmm.cfVI(ITER=30)
 
-phmm.view_cfVI_trace()
+# phmm.view_cfVI_trace()
 
-phmm.sVI(ITER=30)
+# phmm.sVI(ITER=30)
 
-phmm.view_sVI_trace()
+# phmm.view_sVI_trace()
 
 
 # In[ ]:
