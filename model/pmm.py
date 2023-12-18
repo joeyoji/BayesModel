@@ -1,19 +1,10 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-import matplotlib.pyplot as plt
-import seaborn as sns
-sns.set()
-
 import numpy as np
 import scipy.special as spsp
-import scipy.stats as spst
 from tqdm import tqdm
 
-import datetime
-import re
-import warnings
-# warnings.filterwarnings('ignore')
 
 
 class Poisson_Mixture_with_Dirichlet_Gamma_prior:
