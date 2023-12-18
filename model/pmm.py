@@ -1,11 +1,6 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
-
-
-# import tools
-#get_ipython().run_line_magic('matplotlib', 'inline')
 import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set()
@@ -19,9 +14,6 @@ import datetime
 import re
 import warnings
 # warnings.filterwarnings('ignore')
-
-
-# In[2]:
 
 
 class Poisson_Mixture_with_Dirichlet_Gamma_prior:
@@ -191,5 +183,3 @@ def try_pmm_model(C=2,ITER=10000,seed=42):
 if __name__ == '__main__':
 
     try_pmm_model()
-    
-
